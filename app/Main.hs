@@ -6,6 +6,7 @@ import FRP.Netwire hiding (empty)
 import Data.Monoid (Monoid)
 import Data.Set (Set, empty, insert, delete, null, filter)
 import Linear
+import Control.Lens
 import qualified Graphics.UI.SDL as SDL
 
 width = 1280 
@@ -15,16 +16,18 @@ acc = 40
 main :: IO ()
 main = SDL.withInit [SDL.InitEverything] $ do
     screen <- SDL.setVideoMode width height 32 [SDL.SWSurface]
-    void $ go empty screen clockSession_ pos_x pos_y 0 0
+    void $ go empty screen clockSession_ pos (V2 0 0)
 
     where
-    go keysDown screen s wx wy x y = do
+    go keysDown screen s wp p = do
         keysDown' <- parseEvents keysDown
         (ds, s') <- stepSession s
-        (ex, wx') <- stepWire wx ds (Right keysDown')
-        (ey, wy') <- stepWire wy ds (Right keysDown')
-        let x' = either (const 0) id ex
-        let y' = either (const 0) id ey
+        (ex, wp') <- stepWire wp ds (Right keysDown')
+        --(ey, wy') <- stepWire wy ds (Right keysDown')
+        let p' = either (const 0) id ex
+        --let y' = either (const 0) id ey
+        let x = p ^._x
+            y = p ^._y
 
         (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
 
@@ -32,7 +35,7 @@ main = SDL.withInit [SDL.InitEverything] $ do
 
         SDL.flip screen
         SDL.delay (1000 `div` 60)
-        go keysDown' screen s' wx' wy' x' y'
+        go keysDown' screen s' wp' p'
 
 parseEvents :: Set SDL.Keysym -> IO (Set SDL.Keysym)
 parseEvents keysDown = do
@@ -46,6 +49,9 @@ parseEvents keysDown = do
 keyDown :: SDL.SDLKey -> Set SDL.Keysym -> Bool
 keyDown k = not . null . filter ((== k) . SDL.symKey)
 
+
+pos :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (V2 Double)
+pos = liftA2 V2 pos_x pos_y
 
 vel_x :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (Double)
 vel_x = integral 0 . acc_x

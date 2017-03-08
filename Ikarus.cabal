@@ -28,7 +28,8 @@ executable Ikarus-exe
                     , SDL
                     , netwire
                     , containers
-                    , linear 
+                    , linear
+                    , lens 
   default-language:    Haskell2010
 
 test-suite Ikarus-test
