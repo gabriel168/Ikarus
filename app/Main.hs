@@ -11,7 +11,7 @@ import qualified Graphics.UI.SDL as SDL
 
 width = 1280 
 height = 720
-acc = 40
+thrust = 40
 
 main :: IO ()
 main = SDL.withInit [SDL.InitEverything] $ do
@@ -51,28 +51,20 @@ keyDown k = not . null . filter ((== k) . SDL.symKey)
 
 
 pos :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (V2 Double)
-pos = liftA2 V2 pos_x pos_y
+pos = integrateVec (V2 0 0) . vel
 
-vel_x :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (Double)
-vel_x = integral 0 . acc_x
+vel :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (V2 Double)
+vel = integrateVec (V2 0 0) . acc
 
-pos_x :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (Double)
-pos_x = integral ((fromIntegral width)*0.5) . vel_x
+acc :: (Monad m, Monoid e) => Wire s e m (Set SDL.Keysym) (V2 Double)
+acc  =  pure (V2 (-thrust) 0) . when (keyDown SDL.SDLK_LEFT)
+             <|> pure (V2 thrust 0) . when (keyDown SDL.SDLK_RIGHT)
+             <|> pure (V2 0 0)
 
-acc_x :: (Monad m, Monoid e) => Wire s e m (Set SDL.Keysym) (Double)
-acc_x  =  pure (-acc) . when (keyDown SDL.SDLK_LEFT)
-             <|> pure acc . when (keyDown SDL.SDLK_RIGHT)
-             <|> pure 0
-
-vel_y :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (Double)
-vel_y = integral 0 . acc_y
-
-pos_y :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (Double)
-pos_y = integral ((fromIntegral width)*0.5) . vel_y
-
-acc_y :: (Monad m, Monoid e) => Wire s e m (Set SDL.Keysym) (Double)
-acc_y  =  pure (-acc) . when (keyDown SDL.SDLK_UP)
-             <|> pure acc . when (keyDown SDL.SDLK_DOWN)
-             <|> pure 0
+integrateVec :: (Fractional a, HasTime t s) => (V2 a) -> Wire s e m (V2 a) (V2 a)
+integrateVec x' =
+    mkPure $ \ds dx ->
+        let dt = realToFrac (dtime ds)
+    in x' `seq` (Right x', integral (x' + dt*dx))
 
 deriving instance Ord SDL.Keysym
