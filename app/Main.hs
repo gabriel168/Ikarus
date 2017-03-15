@@ -51,7 +51,11 @@ render screen game = do
 width = 1280 
 height = 720
 thrust = 60.0
-agility = 2
+agility = pi
+
+-- Planet Coordinates
+xP = fromIntegral $ div width 2
+yP = fromIntegral $ div height 2
 
 toCrapCoordinates :: (Num a) => (a,a) -> (a,a)
 toCrapCoordinates (x,y) = (x,(fromIntegral height)-y)
@@ -77,8 +81,9 @@ main = SDL.withInit [SDL.InitEverything] $ do
         let (vel_x, vel_y) = (f*(velV ^._x), -f*(velV ^._y)) where f = 1.0 :: Double
         --putStrLn (show or_x)	
         (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
-        (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 0 50 200 >>= SDL.fillRect screen (Just $ SDL.Rect (round x-25) (round (y-25)) 50 50)
-        (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 0 200 0 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-15+or_x)) (round (y-15+or_y)) 30 30)
+        (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 100 70 50 >>= SDL.fillRect screen (Just $ SDL.Rect (round xP-75) (round (yP-75)) 150 150)
+	(SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 0 50 200 >>= SDL.fillRect screen (Just $ SDL.Rect (round x-20) (round (y-20)) 40 40)
+        (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 0 200 0 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+or_x)) (round (y-10+or_y)) 20 20)
         (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 0 0 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+vel_x)) (round (y-10+vel_y)) 20 20)
         
         
@@ -105,8 +110,10 @@ vel :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (V2 Double)
 vel = integrateVec (V2 0 0) . acc
 
 acc :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (V2 Double)
-acc  = (*)<$>thrustlevel<*>dir_Vec 
-
+acc  = let thrustacc = (*)<$>thrustlevel<*>dir_Vec
+	   gravityacc = (/)<$>graV<*>distW
+	in (+)<$>thrustacc<*>gravityacc
+ 
 thrustlevel :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (V2 Double)
 thrustlevel = pure thrust . when (keyDown SDL.SDLK_UP)
 --              <|> pure (-thrust). when (keyDown SDL.SDLK_DOWN)
@@ -121,7 +128,15 @@ orientation :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym)  Double
 orientation = integral (0) . turning_rate
 
 dir_Vec :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (V2 Double)
-dir_Vec =  angle <$> orientation 
+dir_Vec = angle <$> orientation 
+
+
+-- Gravity
+graV :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) (V2 Double)
+graV = (-)<$>pos<*>(pure $ V2 xP yP)
+
+distW ::  (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym)  (V2 Double)
+distW = pure <$> (fmap quadrance graV)
 
 integrateVec :: (Fractional a, HasTime t s) => (V2 a) -> Wire s e m (V2 a) (V2 a)
 integrateVec x' =
