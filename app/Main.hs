@@ -8,11 +8,13 @@ import Data.Set (Set, empty, insert, delete, null, filter)
 import Linear
 import Control.Lens
 import qualified Graphics.UI.SDL as SDL
+import Graphics.UI.SDL.Primitives
+import Graphics.UI.SDL.Color
 
 --Parameters
 width = 1280 
 height = 720
-thrust = 160.0
+thrust = 160 :: Double
 agility = 1+pi
 
 -- Planet Coordinates
@@ -36,43 +38,60 @@ deriving instance Ord SDL.Keysym
 
 --Core Logic
 data GameState = GameState{
-    acc :: V2 Double,
-    vel :: V2 Double,
-    pos :: V2 Double, 
-    orientation :: Double
+      acc :: V2 Double
+    , vel :: V2 Double
+    , pos :: V2 Double 
+    , orientation :: Double
 }
 
 start :: GameState
 start = GameState{
-    acc = V2 0 0,
-    vel = V2 0 300,
-    pos = V2 (xP-200) yP,
-    orientation = 0
+      acc = V2 0 0
+    , vel = V2 0 (-200)
+    , pos = V2 (xP-220) yP
+    , orientation = 0
 }
 
 runGame :: (Monad m, HasTime t s) => GameState -> Wire s () m (Set SDL.Keysym) GameState
 runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (next ds keys))   
     where next ds ks = let keyDown = flip keyDown' $ ks
-                           dt = realToFrac (dtime ds) :: Double
+                           dt = realToFrac (dtime ds)
+                           
+                           --Turn Rocket
                            turning_rate = if keyDown (SDL.SDLK_LEFT) then agility
                                    else if keyDown (SDL.SDLK_RIGHT) then (-agility)
                                    else 0
                            
+                           --Prograde/Retrograde hold
+                           or' = if keyDown (SDL.SDLK_w) then getA $ vel prevF
+                                 else if keyDown (SDL.SDLK_s) then (+pi).getA $ vel prevF
+                                 else (+(dt*turning_rate)) . orientation $ prevF
+                           
+                           --Gravity
                            pVec = (V2 xP yP) - (pos prevF)  
-                           gravity = pVec ^* (75000/(quadrance pVec))
+                           gravity = pVec ^* (10000000/((quadrance pVec)**1.5))
                            -- In Thrust We Trust --
-                           engine_acc = (*engine_Power) . angle . orientation $ prevF
+                           engine_acc = (^*engine_Power) . angle $ or'
                            engine_Power = if keyDown (SDL.SDLK_UP) then thrust 
                                           else if keyDown (SDL.SDLK_DOWN) then (-thrust)
                                           else 0
-                        in GameState{
-                            acc = engine_acc + gravity,
-                            vel = vel prevF + (dt *^ acc prevF),
-                            pos = pos prevF + (dt *^ vel prevF),
-                            orientation = orientation prevF + dt * turning_rate
-                        }
+                            
+                           acc' = engine_acc + gravity
+                           vel' = vel prevF + (dt *^ acc')
+                           pos' = pos prevF + (dt *^ vel')
 
+                        in GameState{ acc = acc'
+                                    , vel = vel'
+                                    , pos = pos'
+                                    , orientation = or' }
+
+gameW :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) GameState
 gameW = runGame start
+
+getA :: V2 Double -> Double
+getA v = atan2 y x
+    where x = v ^._x
+          y = v ^._y
 
 --Graphics Rendering
 toCrapCoordinates :: (Num a) => (a,a) -> (a,a)
@@ -84,8 +103,8 @@ render screen game = do
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
    
     --Planet
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 170 80 10 >>= SDL.fillRect screen (Just $ SDL.Rect (round xP-75) (round yP-75) 150 150)
-       
+    filledCircle screen (round xP) (round yP) 120 (SDL.Pixel 0xEA7623FF)   
+    
     --Rocket
     let p = pos game
         (x,y) = toCrapCoordinates (p ^._x, p ^._y)
@@ -124,6 +143,6 @@ main = do
         (eg, gW') <- stepWire gW ds (Right keysDown')
         let ng = either (const start) id eg
         render screen ng  
-          
+
         SDL.delay (1000 `div` 60)
         go keysDown' screen cses' gW'              

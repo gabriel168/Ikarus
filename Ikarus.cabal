@@ -26,6 +26,7 @@ executable Ikarus-exe
   build-depends:      base
                     , Ikarus
                     , SDL
+                    , SDL-gfx
                     , netwire
                     , containers
                     , linear

@@ -41,6 +41,7 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 - SDL-0.6.5.1 
+- SDL-gfx-0.6.0.2
 
 # Override default flag values for local packages and extra-deps
 flags: {}
