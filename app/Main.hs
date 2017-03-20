@@ -14,7 +14,7 @@ import Graphics.UI.SDL.Color
 --Parameters
 width = 1280 
 height = 720
-thrust = 160 :: Double
+thrust = 100 :: Double
 agility = 1+pi
 
 -- Planet Coordinates
@@ -42,7 +42,7 @@ data GameState = GameState{
     , vel :: V2 Double
     , pos :: V2 Double 
     , orientation :: Double
-}
+} | Over
 
 start :: GameState
 start = GameState{
@@ -65,6 +65,8 @@ runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (next ds keys))
                            --Prograde/Retrograde hold
                            or' = if keyDown (SDL.SDLK_w) then getA $ vel prevF
                                  else if keyDown (SDL.SDLK_s) then (+pi).getA $ vel prevF
+                                 else if keyDown (SDL.SDLK_a) then (+pi/2).getA $ vel prevF
+                                 else if keyDown (SDL.SDLK_d) then (+(-pi/2)).getA $ vel prevF
                                  else (+(dt*turning_rate)) . orientation $ prevF
                            
                            --Gravity
@@ -80,10 +82,11 @@ runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (next ds keys))
                            vel' = vel prevF + (dt *^ acc')
                            pos' = pos prevF + (dt *^ vel')
 
-                        in GameState{ acc = acc'
-                                    , vel = vel'
-                                    , pos = pos'
-                                    , orientation = or' }
+                        in if keyDown (SDL.SDLK_q) then Over 
+                           else GameState{  acc = acc'
+                                           , vel = vel'
+                                           , pos = pos'
+                                           , orientation = or' }
 
 gameW :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) GameState
 gameW = runGame start
@@ -97,13 +100,16 @@ getA v = atan2 y x
 toCrapCoordinates :: (Num a) => (a,a) -> (a,a)
 toCrapCoordinates (x,y) = (x,(fromIntegral height)-y)
 
-render :: SDL.Surface -> GameState -> IO ()
+render :: SDL.Surface -> GameState -> IO Bool
+render screen Over = do 
+    SDL.quit
+    return False
 render screen game = do
     --Background
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
    
     --Planet
-    filledCircle screen (round xP) (round yP) 120 (SDL.Pixel 0xEA7623FF)   
+    filledCircle screen (round xP) (round yP) 120 (SDL.Pixel 0xE59623FF)   
     
     --Rocket
     let p = pos game
@@ -112,7 +118,7 @@ render screen game = do
 
     --Orientation Indicator
     let  dir = angle . orientation $ game
-         (dir_x, dir_y) = (f*(dir ^._x), -f*(dir ^._y)) where f = 10.0 :: Double
+         (dir_x, dir_y) = (f*(dir ^._x), -f*(dir ^._y)) where f = 15.0 :: Double
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 0 200 0 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+dir_x)) (round (y-10+dir_y)) 20 20)
 
     --Velocity Indicator
@@ -126,6 +132,7 @@ render screen game = do
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 20 100 100 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+a_x)) (round (y-10+a_y)) 20 20)
 
     SDL.flip screen
+    return True
 
 --------------------------------------------------------------
 
@@ -142,7 +149,10 @@ main = do
         (ds, cses') <- stepSession cses 
         (eg, gW') <- stepWire gW ds (Right keysDown')
         let ng = either (const start) id eg
-        render screen ng  
-
-        SDL.delay (1000 `div` 60)
-        go keysDown' screen cses' gW'              
+        
+        x <- render screen ng  
+        if x then do 
+            SDL.delay (1000 `div` 60)
+            go keysDown' screen cses' gW'
+        else do
+            return ()
