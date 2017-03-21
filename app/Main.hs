@@ -37,17 +37,17 @@ keyDown' k = not . null . filter ((== k) . SDL.symKey)
 deriving instance Ord SDL.Keysym
 
 --Core Logic
-data GameState = GameState{
+data GameState = Running{
       acc :: V2 Double
     , vel :: V2 Double
     , pos :: V2 Double 
-    , orientation :: Double
-} | Over
+    , orientation :: Double }
+               | Over
 
 start :: GameState
-start = GameState{
+start = Running{
       acc = V2 0 0
-    , vel = V2 0 (-200)
+    , vel = V2 0 (-210)
     , pos = V2 (xP-220) yP
     , orientation = 0
 }
@@ -75,7 +75,6 @@ runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (next ds keys))
                            -- In Thrust We Trust --
                            engine_acc = (^*engine_Power) . angle $ or'
                            engine_Power = if keyDown (SDL.SDLK_UP) then thrust 
-                                          else if keyDown (SDL.SDLK_DOWN) then (-thrust)
                                           else 0
                             
                            acc' = engine_acc + gravity
@@ -83,7 +82,7 @@ runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (next ds keys))
                            pos' = pos prevF + (dt *^ vel')
 
                         in if keyDown (SDL.SDLK_q) then Over 
-                           else GameState{  acc = acc'
+                           else Running{  acc = acc'
                                            , vel = vel'
                                            , pos = pos'
                                            , orientation = or' }
@@ -97,8 +96,11 @@ getA v = atan2 y x
           y = v ^._y
 
 --Graphics Rendering
-toCrapCoordinates :: (Num a) => (a,a) -> (a,a)
-toCrapCoordinates (x,y) = (x,(fromIntegral height)-y)
+toCrapCoordinates :: (Num a) => V2 a -> (a,a) 
+toCrapCoordinates v = (v^._x,(fromIntegral height)-(v^._y))
+
+relVecCoordinates :: (Num a) => V2 a -> a -> (a,a)
+relVecCoordinates v f = (f*v^._x, -f*v^._y)
 
 render :: SDL.Surface -> GameState -> IO Bool
 render screen Over = do 
@@ -109,27 +111,29 @@ render screen game = do
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
    
     --Planet
-    filledCircle screen (round xP) (round yP) 120 (SDL.Pixel 0xE59623FF)   
+    filledCircle screen (round xP) (round yP) 120 (SDL.Pixel 0xAE6826FF)
     
     --Rocket
-    let p = pos game
-        (x,y) = toCrapCoordinates (p ^._x, p ^._y)
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 0 50 200 >>= SDL.fillRect screen (Just $ SDL.Rect (round x-25) (round (y-25)) 50 50)
+    let (x,y) = toCrapCoordinates . pos $ game
+        pI = 0.7*pi
+        a = angle . orientation $ game 
+        (a_x,a_y) = relVecCoordinates a 30 
+        b = angle .(+pI) . orientation $ game
+        (b_x,b_y) = relVecCoordinates b 20
+        c = angle . (+(-pI)) . orientation $ game
+        (c_x,c_y) = relVecCoordinates c 20
 
-    --Orientation Indicator
-    let  dir = angle . orientation $ game
-         (dir_x, dir_y) = (f*(dir ^._x), -f*(dir ^._y)) where f = 15.0 :: Double
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 0 200 0 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+dir_x)) (round (y-10+dir_y)) 20 20)
+    filledTrigon screen (round$x+a_x) (round$y+a_y) (round$x+b_x) (round$y+b_y) (round$x+c_x) (round$y+c_y) (SDL.Pixel 0xC4CED3FF) 
 
     --Velocity Indicator
     let v = vel game
-        (vel_x, vel_y) = (f*(v ^._x), -f*(v^._y)) where f = 1
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 0 0 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+vel_x)) (round (y-10+vel_y)) 20 20)  
+        (vel_x,vel_y) = relVecCoordinates v 1 
+    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 40 50 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+vel_x)) (round (y-10+vel_y)) 15 15)  
     
     --Acceleration Indicator
     let a = acc game
-        (a_x, a_y) = (f*(a^._x), -f*(a^._y)) where f = 1
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 20 100 100 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+a_x)) (round (y-10+a_y)) 20 20)
+        (acc_x,acc_y) = relVecCoordinates a 1
+    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 40 250 40 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+acc_x)) (round (y-10+acc_y)) 15 15)
 
     SDL.flip screen
     return True
