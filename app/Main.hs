@@ -67,8 +67,8 @@ nextFrame ds ks prevF  =
         dt = realToFrac (dtime ds)
         
         --View Zoom
-        zoomRate = if keyDown (SDL.SDLK_1) then zoomSpeed
-                 else if keyDown (SDL.SDLK_2) then (-zoomSpeed)
+        zoomRate = if keyDown (SDL.SDLK_q) then zoomSpeed
+                 else if keyDown (SDL.SDLK_e) then (-zoomSpeed)
                  else 0
         zoom' = (*(1+dt*zoomRate)) . camZoom $ prevF
         --Cam Pos
@@ -103,7 +103,7 @@ nextFrame ds ks prevF  =
         vel' = vel prevF + (dt *^ acc')
         pos' = pos prevF + (dt *^ vel')
 
-    in if keyDown (SDL.SDLK_q) then Over 
+    in if keyDown (SDL.SDLK_ESCAPE) then Over 
        else Running{ acc = acc'
                    , vel = vel'
                    , pos = pos'
