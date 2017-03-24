@@ -14,10 +14,12 @@ import Graphics.UI.SDL.Color
 --Parameters
 width = 1280 
 height = 720
-thrust = 100 :: Double
+thrust = 100 
 agility = 1+pi
+zoomSpeed = 10
 
 -- Planet Coordinates
+center = V2 xP yP 
 xP = fromIntegral $ div width 2
 yP = fromIntegral $ div height 2
 
@@ -37,11 +39,14 @@ keyDown' k = not . null . filter ((== k) . SDL.symKey)
 deriving instance Ord SDL.Keysym
 
 --Core Logic
+
 data GameState = Running{
       acc :: V2 Double
     , vel :: V2 Double
     , pos :: V2 Double 
-    , orientation :: Double }
+    , orientation :: !Double
+    , camPos :: V2 Double
+    , camZoom :: !Double }
                | Over
 
 start :: GameState
@@ -50,42 +55,61 @@ start = Running{
     , vel = V2 0 (-210)
     , pos = V2 (xP-220) yP
     , orientation = 0
-}
+    , camPos = center
+    , camZoom = 1 }
 
 runGame :: (Monad m, HasTime t s) => GameState -> Wire s () m (Set SDL.Keysym) GameState
-runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (next ds keys))   
-    where next ds ks = let keyDown = flip keyDown' $ ks
-                           dt = realToFrac (dtime ds)
-                           
-                           --Turn Rocket
-                           turning_rate = if keyDown (SDL.SDLK_LEFT) then agility
-                                   else if keyDown (SDL.SDLK_RIGHT) then (-agility)
-                                   else 0
-                           
-                           --Prograde/Retrograde hold
-                           or' = if keyDown (SDL.SDLK_w) then getA $ vel prevF
-                                 else if keyDown (SDL.SDLK_s) then (+pi).getA $ vel prevF
-                                 else if keyDown (SDL.SDLK_a) then (+pi/2).getA $ vel prevF
-                                 else if keyDown (SDL.SDLK_d) then (+(-pi/2)).getA $ vel prevF
-                                 else (+(dt*turning_rate)) . orientation $ prevF
-                           
-                           --Gravity
-                           pVec = (V2 xP yP) - (pos prevF)  
-                           gravity = pVec ^* (10000000/((quadrance pVec)**1.5))
-                           -- In Thrust We Trust --
-                           engine_acc = (^*engine_Power) . angle $ or'
-                           engine_Power = if keyDown (SDL.SDLK_UP) then thrust 
-                                          else 0
-                            
-                           acc' = engine_acc + gravity
-                           vel' = vel prevF + (dt *^ acc')
-                           pos' = pos prevF + (dt *^ vel')
+runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (nextFrame ds keys prevF))   
+    
+nextFrame :: (HasTime a t) => t -> Set SDL.Keysym -> GameState -> GameState
+nextFrame ds ks prevF  = 
+    let keyDown = flip keyDown' $ ks
+        dt = realToFrac (dtime ds)
+        
+        --View Zoom
+        zoomRate = if keyDown (SDL.SDLK_1) then zoomSpeed
+                 else if keyDown (SDL.SDLK_2) then (-zoomSpeed)
+                 else 0
+        zoom' = (*(1+dt*zoomRate)) . camZoom $ prevF
+        --Cam Pos
+        camPos' = (dt*^camDir) + (camPos prevF)
+        cS = 100
+        camDir = if keyDown (SDL.SDLK_i) then V2 0 cS
+                 else if keyDown (SDL.SDLK_j) then V2 (-cS) 0
+                 else if keyDown (SDL.SDLK_k) then V2 0 (-cS)
+                 else if keyDown (SDL.SDLK_l) then V2 cS 0
+                 else V2 0 0
+        --Turn Rocket
+        turning_rate = if keyDown (SDL.SDLK_LEFT) then agility
+                else if keyDown (SDL.SDLK_RIGHT) then (-agility)
+                else 0
+        
+        --Prograde/Retrograde hold
+        or' = if keyDown (SDL.SDLK_w) then getA $ vel prevF
+              else if keyDown (SDL.SDLK_s) then (+pi).getA $ vel prevF
+              else if keyDown (SDL.SDLK_a) then (+pi/2).getA $ vel prevF
+              else if keyDown (SDL.SDLK_d) then (+(-pi/2)).getA $ vel prevF
+              else (+(dt*turning_rate)) . orientation $ prevF
+        
+        --Gravity
+        pVec = (center) - (pos prevF)  
+        gravity = pVec ^* (10000000/((quadrance pVec)**1.5))
+        -- In Thrust We Trust --
+        engine_acc = (^*engine_Power) . angle $ or'
+        engine_Power = if keyDown (SDL.SDLK_UP) then thrust 
+                       else 0
+         
+        acc' = engine_acc + gravity
+        vel' = vel prevF + (dt *^ acc')
+        pos' = pos prevF + (dt *^ vel')
 
-                        in if keyDown (SDL.SDLK_q) then Over 
-                           else Running{  acc = acc'
-                                           , vel = vel'
-                                           , pos = pos'
-                                           , orientation = or' }
+    in if keyDown (SDL.SDLK_q) then Over 
+       else Running{ acc = acc'
+                   , vel = vel'
+                   , pos = pos'
+                   , orientation = or'
+                   , camPos = pos' 
+                   , camZoom = zoom' }
 
 gameW :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) GameState
 gameW = runGame start
@@ -96,22 +120,29 @@ getA v = atan2 y x
           y = v ^._y
 
 --Graphics Rendering
-toCrapCoordinates :: (Num a) => V2 a -> (a,a) 
-toCrapCoordinates v = (v^._x,(fromIntegral height)-(v^._y))
+toCrapCoordinates' :: V2 Double -> Double -> V2 Double -> (Double, Double)
+toCrapCoordinates' camP z v = (dispV ^._x, (height' - dispV ^._y))
+    where dispV = z*^(v - camP) + center
+          height' = fromIntegral height
 
-relVecCoordinates :: (Num a) => V2 a -> a -> (a,a)
-relVecCoordinates v f = (f*v^._x, -f*v^._y)
+relVecCoordinates' :: (Num a) => a -> V2 a -> a -> (a,a)
+relVecCoordinates' z v f = (z*f*v^._x, -z*f*v^._y)
 
 render :: SDL.Surface -> GameState -> IO Bool
 render screen Over = do 
     SDL.quit
     return False
+
 render screen game = do
+    let toCrapCoordinates = toCrapCoordinates' (camPos game) (camZoom game)
+        relVecCoordinates = relVecCoordinates' $ camZoom game
+        zF = camZoom game
     --Background
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
    
     --Planet
-    filledCircle screen (round xP) (round yP) 120 (SDL.Pixel 0xAE6826FF)
+    let (xP', yP') = toCrapCoordinates center 
+    filledCircle screen (round xP') (round yP') (round$120*zF) (SDL.Pixel 0xAE6826FF)
     
     --Rocket
     let (x,y) = toCrapCoordinates . pos $ game
@@ -122,21 +153,24 @@ render screen game = do
         (b_x,b_y) = relVecCoordinates b 20
         c = angle . (+(-pI)) . orientation $ game
         (c_x,c_y) = relVecCoordinates c 20
-
+    
     filledTrigon screen (round$x+a_x) (round$y+a_y) (round$x+b_x) (round$y+b_y) (round$x+c_x) (round$y+c_y) (SDL.Pixel 0xC4CED3FF) 
-
+    --filledCircle screen (round x) (round y) (3) (SDL.Pixel 0xFFFFFFFF)
+    
     --Velocity Indicator
     let v = vel game
         (vel_x,vel_y) = relVecCoordinates v 1 
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 40 50 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+vel_x)) (round (y-10+vel_y)) 15 15)  
+        indS = round $ zF * 15
+    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 40 50 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+vel_x)) (round (y-10+vel_y)) indS indS)  
     
     --Acceleration Indicator
     let a = acc game
         (acc_x,acc_y) = relVecCoordinates a 1
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 40 250 40 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+acc_x)) (round (y-10+acc_y)) 15 15)
+    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 40 250 40 >>= SDL.fillRect screen (Just $ SDL.Rect (round (x-10+acc_x)) (round (y-10+acc_y)) indS indS)
 
     SDL.flip screen
     return True
+
 
 --------------------------------------------------------------
 
