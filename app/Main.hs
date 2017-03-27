@@ -11,6 +11,7 @@ import qualified Graphics.UI.SDL as SDL
 import Graphics.UI.SDL.Primitives
 import Graphics.UI.SDL.Color
 import Text.Show.Functions
+import Bodies
 
 {-
 ------------------------------------ 
@@ -42,12 +43,9 @@ solarMass = 1000000000
 solarRadius = 10000
 
 -- Planet Coordinates
-center = V2 xP' yP' 
-xP' = fromIntegral $ div width 2
-yP' = fromIntegral $ div height 2
+center = V2 (f width) (f height)
+    where f = fromIntegral . (`div` 2)
 
-xP = 0
-yP = 0
 --Keypress detection
 parseEvents :: Set SDL.Keysym -> IO (Set SDL.Keysym)
 parseEvents keysDown = do
@@ -58,15 +56,15 @@ parseEvents keysDown = do
         SDL.KeyUp k -> parseEvents (delete k keysDown)
         _ -> parseEvents keysDown
 
-keyDown' :: SDL.SDLKey -> Set SDL.Keysym -> Bool
-keyDown' k = not . null . filter ((== k) . SDL.symKey) 
+keyDown' :: Set SDL.Keysym -> SDL.SDLKey -> Bool
+keyDown' s k = not . null . filter ((== k) . SDL.symKey) $ s
 
 deriving instance Ord SDL.Keysym
 
 --Key processing
 getWarp :: Set SDL.Keysym -> Double
 getWarp ks = 
-    let keyDown = flip keyDown' $ ks
+    let keyDown = keyDown' ks
     in 
        if keyDown (SDL.SDLK_1) then 2
   else if keyDown (SDL.SDLK_2) then 4
@@ -78,7 +76,7 @@ getWarp ks =
 
 getZoom  :: Set SDL.Keysym -> Double
 getZoom ks = 
-    let  keyDown = flip keyDown' $ ks
+    let  keyDown = keyDown' ks
     in 
             if keyDown (SDL.SDLK_q) then zoomSpeed
        else if keyDown (SDL.SDLK_e) then (-zoomSpeed)
@@ -86,7 +84,7 @@ getZoom ks =
 
 getOrientation :: Set SDL.Keysym -> Double -> (GameState -> Double)
 getOrientation ks dt =
-    let  keyDown = flip keyDown' $ ks
+    let  keyDown = keyDown' ks
          offset  = if keyDown (SDL.SDLK_w) then Just 0  
               else if keyDown (SDL.SDLK_s) then Just pi
               else if keyDown (SDL.SDLK_a) then Just (pi/2)
@@ -101,14 +99,6 @@ getOrientation ks dt =
         
  
 --Core Logic
-data CelestialBody = Body
-    { radius :: !Double
-    , mass :: !Double
-    , trajectory :: Double -> V2 Double 
-    , bodyPos :: (V2 Double)
-    , colour :: !SDL.Pixel }
-                   deriving (Show)
-
 data GameState = Running
     { acc :: (V2 Double)
     , vel :: (V2 Double)
@@ -116,9 +106,10 @@ data GameState = Running
     , orientation :: !Double
     , camPos :: (V2 Double)
     , camZoom :: !Double 
-    , worldTime :: !Double }
+    , worldTime :: !Double 
+    , solarSystem :: [CelestialBody] }
                | Over
-               deriving (Show)
+
 start :: GameState
 start = Running
     { acc = V2 0 0
@@ -127,14 +118,18 @@ start = Running
     , orientation = 0
     , camPos = pos start
     , camZoom = 1 
-    , worldTime = 0 }
+    , worldTime = 0 
+    , solarSystem = theSolarSystem }
 
 runGame :: (Monad m, HasTime t s) => GameState -> Wire s () m (Set SDL.Keysym) GameState
 runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (nextFrame ds keys prevF))   
 
+gameW :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) GameState
+gameW = runGame start
+
 nextFrame :: (HasTime a t) => t -> Set SDL.Keysym -> GameState -> GameState
 nextFrame ds ks prevF  = 
-    let keyDown = flip keyDown' $ ks
+    let keyDown = keyDown' $ ks
         warpF = getWarp ks
         dt = (*warpF) . realToFrac . dtime $ ds
         
@@ -142,18 +137,22 @@ nextFrame ds ks prevF  =
         zoomRate = getZoom ks
         zoom' = if keyDown (SDL.SDLK_r) then 1
                 else (*(1+dt*zoomRate)) . camZoom $ prevF
-        
+
+        --Update Solar System
+        solarSystem' = updateSystem (worldTime prevF) (solarSystem prevF)
+
+        --Ship Steering
         or' = getOrientation ks dt $ prevF
-        --Gravity
-        pVec = (V2 xP yP) - (pos prevF)  
-        gravity = pVec ^* (solarMass/((quadrance pVec)**1.5))
-        
         -- In Thrust We Trust --
         engine_acc = (^*engine_Power) . angle $ or'
         engine_Power = if keyDown (SDL.SDLK_UP) then thrust 
                        else 0
+        
+        --Gravity
+        grav = sum . map (gravity$pos prevF) $ solarSystem'
          
-        acc' = engine_acc + gravity
+        --'Integrate' the next velocity/position
+        acc' = engine_acc + grav
         vel' = vel prevF + (dt *^ acc')
         pos' = pos prevF + (dt *^ vel')
 
@@ -164,10 +163,16 @@ nextFrame ds ks prevF  =
                    , orientation = or'
                    , camPos = pos' 
                    , camZoom = zoom'
-                   , worldTime = dt+(worldTime prevF) }
+                   , worldTime = dt+(worldTime prevF)
+                   , solarSystem = solarSystem' }
 
-gameW :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) GameState
-gameW = runGame start
+
+gravity :: V2 Double -> CelestialBody -> V2 Double
+gravity player body = vec ^* ((mass body)/((**1.5).quadrance $ vec)) 
+    where vec = (bodyPos body) - player
+
+updateSystem :: Double -> [CelestialBody] -> [CelestialBody]
+updateSystem time sys = flip map sys (\cb -> cb {bodyPos = trajectory cb $ time })
 
 getA :: V2 Double -> Double
 getA v = atan2 y x
@@ -183,9 +188,11 @@ toCrapCoordinates' camP z v = (dispV ^._x, (height' - dispV ^._y))
 relVecCoordinates' :: (Num a) => a -> a -> V2 a -> (a,a)
 relVecCoordinates' z f v = (z*f*v^._x, -z*f*v^._y)
 
-renderBody :: SDL.Surface -> CelestialBody -> IO ()
-renderBody screen body = do
-    -- TODO
+renderBody :: SDL.Surface -> (V2 Double -> (Double, Double)) -> Double -> CelestialBody -> IO ()
+renderBody screen tcC zF body = do
+    let (x,y) = tcC $ bodyPos body
+        r = round $ (*zF) . radius $ body
+    filledCircle screen (round x) (round y) r (colour body)
     return ()
 
 
@@ -197,13 +204,13 @@ renderFrame screen game = do
     let toCrapCoordinates = toCrapCoordinates' (camPos game) (camZoom game)
         relVecCoordinates = relVecCoordinates' $ camZoom game
         zF = camZoom game
+        
     --Background
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
    
-    --Planet
-    let (xP', yP') = toCrapCoordinates (V2 xP yP) 
-    filledCircle screen (round xP') (round yP') (round$solarRadius*zF) (SDL.Pixel 0xFFDE00FF)
-    
+    --Planets
+    mapM_ (renderBody screen toCrapCoordinates zF) (solarSystem game)
+
     --Rocket
     let (x,y) = toCrapCoordinates . pos $ game
         pI = 0.7*pi
