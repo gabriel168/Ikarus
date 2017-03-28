@@ -42,10 +42,6 @@ zoomSpeed = 10
 solarMass = 1000000000
 solarRadius = 10000
 
--- Planet Coordinates
-center = V2 (f width) (f height)
-    where f = fromIntegral . (`div` 2)
-
 --Keypress detection
 parseEvents :: Set SDL.Keysym -> IO (Set SDL.Keysym)
 parseEvents keysDown = do
@@ -180,6 +176,9 @@ getA v = atan2 y x
           y = v ^._y
 
 --Graphics Rendering
+center = V2 (f width) (f height)
+    where f = fromIntegral . (`div` 2)
+
 toCrapCoordinates' :: V2 Double -> Double -> V2 Double -> (Double, Double)
 toCrapCoordinates' camP z v = (dispV ^._x, (height' - dispV ^._y))
     where dispV = z*^(v - camP) + center
@@ -190,11 +189,13 @@ relVecCoordinates' z f v = (z*f*v^._x, -z*f*v^._y)
 
 renderBody :: SDL.Surface -> (V2 Double -> (Double, Double)) -> Double -> CelestialBody -> IO ()
 renderBody screen tcC zF body = do
-    let (x,y) = tcC $ bodyPos body
-        r = round $ (*zF) . radius $ body
+    let (xC, yC) = tcC $ V2 0 0
+        (x,y) = tcC $ bodyPos body
+        r = round $ (*zF) . size $ body
+        t_r = trajectoryRadius body
+    circle screen (round xC) (round yC) (round$zF*t_r) (SDL.Pixel 0x33B5E5AA)    
     filledCircle screen (round x) (round y) r (colour body)
     return ()
-
 
 renderFrame :: SDL.Surface -> GameState -> IO Bool
 renderFrame screen Over = do 
