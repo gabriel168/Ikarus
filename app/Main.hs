@@ -11,7 +11,10 @@ import qualified Graphics.UI.SDL as SDL
 import Graphics.UI.SDL.Primitives
 import Graphics.UI.SDL.Color
 import Text.Show.Functions
+
+import Types
 import Bodies
+import Rendering
 
 {-
 ------------------------------------ 
@@ -33,14 +36,9 @@ import Bodies
 ------------------------------------}
 
 --Parameters
-width = 1920 
-height = 1000
 thrust = 100 
 agility = 1+pi
 zoomSpeed = 7 
-
-solarMass = 1000000000
-solarRadius = 10000
 
 --Keypress detection
 parseEvents :: Set SDL.Keysym -> IO (Set SDL.Keysym)
@@ -52,67 +50,56 @@ parseEvents keysDown = do
         SDL.KeyUp k -> parseEvents (delete k keysDown)
         _ -> parseEvents keysDown
 
-keyDown' :: Set SDL.Keysym -> SDL.SDLKey -> Bool
-keyDown' s k = not . null . filter ((== k) . SDL.symKey) $ s
+keyDown :: Set SDL.Keysym -> SDL.SDLKey -> Bool
+keyDown s k = not . null . filter ((== k) . SDL.symKey) $ s
 
 deriving instance Ord SDL.Keysym
 
 --Key processing
 getWarp :: Set SDL.Keysym -> Double
 getWarp ks = 
-    let keyDown = keyDown' ks
-    in if keyDown (SDL.SDLK_1) then 2
-  else if keyDown (SDL.SDLK_2) then 4
-  else if keyDown (SDL.SDLK_3) then 8
-  else if keyDown (SDL.SDLK_4) then 16
-  else if keyDown (SDL.SDLK_5) then 32
-  else if keyDown (SDL.SDLK_6) then 64
-  else if keyDown (SDL.SDLK_7) then 128
-  else if keyDown (SDL.SDLK_8) then 256
+    let keyDown' = keyDown ks
+    in if keyDown' (SDL.SDLK_1) then 2
+  else if keyDown' (SDL.SDLK_2) then 4
+  else if keyDown' (SDL.SDLK_3) then 8
+  else if keyDown' (SDL.SDLK_4) then 16
+  else if keyDown' (SDL.SDLK_5) then 32
+  else if keyDown' (SDL.SDLK_6) then 64
+  else if keyDown' (SDL.SDLK_7) then 128
+  else if keyDown' (SDL.SDLK_8) then 256
   else 1 
 
 getZoom :: Set SDL.Keysym -> Double
 getZoom ks = 
-    let  keyDown = keyDown' ks
-    in if keyDown (SDL.SDLK_q) then zoomSpeed
-  else if keyDown (SDL.SDLK_e) then (-zoomSpeed)
+    let  keyDown' = keyDown ks
+    in if keyDown' (SDL.SDLK_q) then zoomSpeed
+  else if keyDown' (SDL.SDLK_e) then (-zoomSpeed)
   else 0
 
 getOrientation :: Set SDL.Keysym -> Double -> (GameState -> Double)
 getOrientation ks dt =
-    let  keyDown = keyDown' ks
-         offset  = if keyDown (SDL.SDLK_w) then Just 0  
-              else if keyDown (SDL.SDLK_s) then Just pi
-              else if keyDown (SDL.SDLK_a) then Just (pi/2)
-              else if keyDown (SDL.SDLK_d) then Just (-pi/2)
+    let  keyDown' = keyDown ks
+         offset  = if keyDown' (SDL.SDLK_w) then Just 0  
+              else if keyDown' (SDL.SDLK_s) then Just pi
+              else if keyDown' (SDL.SDLK_a) then Just (pi/2)
+              else if keyDown' (SDL.SDLK_d) then Just (-pi/2)
               else Nothing 
-         turning_rate = if keyDown (SDL.SDLK_LEFT)  then agility
-                   else if keyDown (SDL.SDLK_RIGHT) then (-agility)
+         turning_rate = if keyDown' (SDL.SDLK_LEFT)  then agility
+                   else if keyDown' (SDL.SDLK_RIGHT) then (-agility)
                    else 0
     in case offset of
-            Just x  -> (+x) . getA . vel
-            Nothing -> (+(dt*turning_rate)) . orientation 
+            Just x  -> (+x) . getA . vel . rocket
+            Nothing -> (+(dt*turning_rate)) . orientation . rocket
         
- 
 --Core Logic
-data GameState = Running
-    { acc :: (V2 Double)
-    , vel :: (V2 Double)
-    , pos :: (V2 Double) 
-    , orientation :: !Double
-    , camPos :: (V2 Double)
-    , camZoom :: !Double 
-    , worldTime :: !Double 
-    , solarSystem :: [CelestialBody] }
-               | Over
-
 start :: GameState
 start = Running
-    { acc = V2 0 0
-    , vel = V2 0 (sqrt$(mass theSun)/((pos start)^._x))
-    , pos = V2 ((*1.1).size$theSun) 0 
-    , orientation = 0
-    , camPos = pos start
+    { rocket = Rocket
+        { acc = V2 0 0
+        , vel = V2 0 (sqrt$(mass theSun)/((pos . rocket $ start)^._x))
+        , pos = V2 ((*1.1).size$theSun) 0 
+        , orientation = 0 }
+    , camPos = pos . rocket $ start
     , camZoom = 1 
     , worldTime = 0 
     , solarSystem = theSolarSystem }
@@ -125,13 +112,13 @@ gameW = runGame start
 
 nextFrame :: (HasTime a t) => t -> Set SDL.Keysym -> GameState -> GameState
 nextFrame ds ks prevF  = 
-    let keyDown = keyDown' $ ks
+    let keyDown' = keyDown $ ks
         warpF = getWarp ks
         dt = (*warpF) . realToFrac . dtime $ ds
         
         --View Zoom
         zoomRate = getZoom ks
-        zoom' = if keyDown (SDL.SDLK_r) then 1
+        zoom' = if keyDown' (SDL.SDLK_r) then 1
                 else (*(1+dt*zoomRate)) . camZoom $ prevF
 
         --Update Solar System
@@ -141,26 +128,27 @@ nextFrame ds ks prevF  =
         or' = getOrientation ks dt $ prevF
         -- In Thrust We Trust --
         engine_acc = (^*engine_Power) . angle $ or'
-        engine_Power = if keyDown (SDL.SDLK_UP) then thrust 
+        engine_Power = if keyDown' (SDL.SDLK_UP) then thrust 
                        else 0
         
         --Gravity
-        grav = sum . map (gravity$pos prevF) $ solarSystem'
+        gravt_acc = sum . map (gravity$pos . rocket$prevF) $ solarSystem'
          
         --'Integrate' the next velocity/position
-        acc' = engine_acc + grav
-        vel' = vel prevF + (dt *^ acc')
-        pos' = pos prevF + (dt *^ vel')
+        acc' = gravt_acc + engine_acc
+        vel' = (vel$rocket prevF) + (dt *^ acc')
+        pos' = (pos$rocket prevF) + (dt *^ vel')
         
-       in if keyDown (SDL.SDLK_ESCAPE) then Over 
-       else Running{ acc = acc'
-                   , vel = vel'
-                   , pos = pos'
-                   , orientation = or'
-                   , camPos = pos' 
-                   , camZoom = zoom'
-                   , worldTime = dt+(worldTime prevF)
-                   , solarSystem = solarSystem' }
+       in if keyDown' (SDL.SDLK_ESCAPE) then Over 
+        else Running{ rocket = Rocket
+                        { acc = acc'
+                        , vel = vel'
+                        , pos = pos'
+                        , orientation = or' }
+                    , camPos = pos' 
+                    , camZoom = zoom'
+                    , worldTime = dt+(worldTime prevF)
+                    , solarSystem = solarSystem' }
 
 
 gravity :: V2 Double -> CelestialBody -> V2 Double
@@ -168,84 +156,18 @@ gravity player body = vec ^* ((mass body)/((**1.5).quadrance $ vec))
     where vec = (bodyPos body) - player
 
 updateSystem :: Double -> [CelestialBody] -> [CelestialBody]
-updateSystem time sys = map (\cb -> cb {bodyPos = trajectory cb $ time }) sys
-
-getA :: V2 Double -> Double
-getA v = atan2 y x
-    where x = v ^._x
-          y = v ^._y
-
---Graphics Rendering
-center = V2 (f width) (f height)
-    where f = fromIntegral . (`div` 2)
-
-toCrapCoordinates' :: V2 Double -> Double -> V2 Double -> (Double, Double)
-toCrapCoordinates' camP z v = (dispV ^._x, (height' - dispV ^._y))
-    where dispV = z*^(v - camP) + center
-          height' = fromIntegral height
-
-relVecCoordinates' :: (Num a) => a -> a -> V2 a -> (a,a)
-relVecCoordinates' z f v = (z*f*v^._x, -z*f*v^._y)
-
-renderBody :: SDL.Surface -> (V2 Double -> (Double, Double)) -> Double -> CelestialBody -> IO ()
-renderBody screen tcC zF body = do
-    let (xC, yC) = tcC $ V2 0 0
-        (x,y) = tcC $ bodyPos body
-        r = round $ (*zF) . size $ body
-        t_r = trajectoryRadius body
-    circle screen (round xC) (round yC) (round$zF*t_r) (SDL.Pixel 0x33B5E5AA)    
-    filledCircle screen (round x) (round y) r (colour body)
-    return ()
-
-renderFrame :: SDL.Surface -> GameState -> IO Bool
-renderFrame screen Over = do 
-    SDL.quit
-    return False
-renderFrame screen game = do
-    let toCrapCoordinates = toCrapCoordinates' (camPos game) (camZoom game)
-        relVecCoordinates = relVecCoordinates' $ camZoom game
-        zF = camZoom game
-        
-    --Background
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
-   
-    --Planets
-    mapM_ (renderBody screen toCrapCoordinates zF) (solarSystem game)
-
-    --Rocket
-    let (x,y) = toCrapCoordinates . pos $ game
-        pI = 0.7*pi
-        a = angle . orientation $ game 
-        (a_x,a_y) = relVecCoordinates 30 a
-        b = angle .(+pI) . orientation $ game
-        (b_x,b_y) = relVecCoordinates 20 b
-        c = angle . (+(-pI)) . orientation $ game
-        (c_x,c_y) = relVecCoordinates 20 c
-    
-    filledTrigon screen (round$x+a_x) (round$y+a_y) (round$x+b_x) (round$y+b_y) (round$x+c_x) (round$y+c_y) (SDL.Pixel 0xC4CED3FF) 
-    filledCircle screen (round x) (round y) (2) (SDL.Pixel 0xC4CED3FF)
-    
-    --Velocity Indicator
-    let v = vel game
-        (vel_x,vel_y) = relVecCoordinates 1 v  
-        indS = round $ zF * 15
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 40 50 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+vel_x) (round$y-zF*10+vel_y) indS indS)  
-    
-    --Acceleration Indicator
-    let a = acc game
-        (acc_x,acc_y) = relVecCoordinates 1 a
-    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 40 250 40 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+acc_x) (round$y-zF*10+acc_y) indS indS)
-
-    SDL.flip screen
-    return True
+updateSystem time sys = map (\cb -> cb {bodyPos = orbit cb $ time }) sys
 
 --------------------------------------------------------------
+
+width' = fromIntegral width
+height' = fromIntegral height
 
 main :: IO ()
 main = do
     SDL.init [SDL.InitEverything]
     SDL.setCaption "Ikarus" ""
-    screen <- SDL.setVideoMode width height 32 [SDL.SWSurface]
+    screen <- SDL.setVideoMode width' height' 32 [SDL.SWSurface]
     void $ go empty screen clockSession_ gameW
 
     where 
