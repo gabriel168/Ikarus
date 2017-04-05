@@ -23,7 +23,7 @@ import Bodies
 - E: Zoom out
 - Q: Zoom in
 - R: Reset Zoom to 1
-- Number n from 1-6: Warp time by a factor of 2^n
+- Number n from 1-8: Warp time by a factor of 2^n
 -
 --Steering--
 - W/S: Point Rocket Pro-/Retrograde
@@ -33,11 +33,11 @@ import Bodies
 ------------------------------------}
 
 --Parameters
-width = 1280 
-height = 720
+width = 1920 
+height = 1000
 thrust = 100 
 agility = 1+pi
-zoomSpeed = 10
+zoomSpeed = 7 
 
 solarMass = 1000000000
 solarRadius = 10000
@@ -61,22 +61,22 @@ deriving instance Ord SDL.Keysym
 getWarp :: Set SDL.Keysym -> Double
 getWarp ks = 
     let keyDown = keyDown' ks
-    in 
-       if keyDown (SDL.SDLK_1) then 2
+    in if keyDown (SDL.SDLK_1) then 2
   else if keyDown (SDL.SDLK_2) then 4
   else if keyDown (SDL.SDLK_3) then 8
   else if keyDown (SDL.SDLK_4) then 16
   else if keyDown (SDL.SDLK_5) then 32
   else if keyDown (SDL.SDLK_6) then 64
+  else if keyDown (SDL.SDLK_7) then 128
+  else if keyDown (SDL.SDLK_8) then 256
   else 1 
 
-getZoom  :: Set SDL.Keysym -> Double
+getZoom :: Set SDL.Keysym -> Double
 getZoom ks = 
     let  keyDown = keyDown' ks
-    in 
-            if keyDown (SDL.SDLK_q) then zoomSpeed
-       else if keyDown (SDL.SDLK_e) then (-zoomSpeed)
-       else 0
+    in if keyDown (SDL.SDLK_q) then zoomSpeed
+  else if keyDown (SDL.SDLK_e) then (-zoomSpeed)
+  else 0
 
 getOrientation :: Set SDL.Keysym -> Double -> (GameState -> Double)
 getOrientation ks dt =
@@ -109,8 +109,8 @@ data GameState = Running
 start :: GameState
 start = Running
     { acc = V2 0 0
-    , vel = V2 0 (-313)
-    , pos = V2 (-10220) 0 
+    , vel = V2 0 (sqrt$(mass theSun)/((pos start)^._x))
+    , pos = V2 ((*1.1).size$theSun) 0 
     , orientation = 0
     , camPos = pos start
     , camZoom = 1 
@@ -151,8 +151,8 @@ nextFrame ds ks prevF  =
         acc' = engine_acc + grav
         vel' = vel prevF + (dt *^ acc')
         pos' = pos prevF + (dt *^ vel')
-
-    in if keyDown (SDL.SDLK_ESCAPE) then Over 
+        
+       in if keyDown (SDL.SDLK_ESCAPE) then Over 
        else Running{ acc = acc'
                    , vel = vel'
                    , pos = pos'
@@ -168,7 +168,7 @@ gravity player body = vec ^* ((mass body)/((**1.5).quadrance $ vec))
     where vec = (bodyPos body) - player
 
 updateSystem :: Double -> [CelestialBody] -> [CelestialBody]
-updateSystem time sys = flip map sys (\cb -> cb {bodyPos = trajectory cb $ time })
+updateSystem time sys = map (\cb -> cb {bodyPos = trajectory cb $ time }) sys
 
 getA :: V2 Double -> Double
 getA v = atan2 y x
@@ -239,7 +239,6 @@ renderFrame screen game = do
     SDL.flip screen
     return True
 
-
 --------------------------------------------------------------
 
 main :: IO ()
@@ -255,10 +254,10 @@ main = do
         (ds, cses') <- stepSession cses 
         (eg, gW') <- stepWire gW ds (Right keysDown')
         let ng = either (const start) id eg
-        
+        putStrLn $ show ds
         x <- renderFrame screen ng  
         if x then do 
-            SDL.delay (1000 `div` 120)
+            --SDL.delay (1000 `div` 120)
             go keysDown' screen cses' gW'
         else do
             return ()
