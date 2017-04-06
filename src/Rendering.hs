@@ -2,6 +2,7 @@ module Rendering where
 
 import Linear
 import Control.Lens
+import Control.Monad
 import qualified Graphics.UI.SDL as SDL
 import Graphics.UI.SDL.Primitives
 import Graphics.UI.SDL.Color
@@ -67,9 +68,24 @@ renderBody screen tcC zF body = do
         (x,y) = tcC $ bodyPos body
         r = round $ (*zF) . size $ body
         t_r = orbitRadius body
-    circle screen (round xC) (round yC) (round$zF*t_r) (SDL.Pixel 0x33B5E5AA)    
+    circle screen (round xC) (round yC) (round$zF*t_r) (SDL.Pixel 0x1b6f8E88)    
     filledCircle screen (round x) (round y) r (colour body)
     return ()
+
+--------------------------------------------------------
+
+renderPrediction :: SDL.Surface -> (V2 Double -> (Double, Double)) -> [V2 Double] -> IO ()
+renderPrediction screen tcC pts = do
+    zipWithM (connectPoints screen tcC (SDL.Pixel 0x6071AF)) pts (tail pts)
+    return ()
+    
+connectPoints :: SDL.Surface -> (V2 Double -> (Double, Double)) -> SDL.Pixel -> V2 Double -> V2 Double -> IO ()
+connectPoints s tcC c a b = do 
+    let r = round
+        (xa, ya) = tcC a
+        (xb, yb) = tcC b
+    line s (r xa) (r ya) (r xb) (r yb) c
+    return ()  
 
 --------------------------------------------------------
 
@@ -90,6 +106,9 @@ renderFrame screen game = do
 
     --Rocket
     renderRocket screen (rocket game) toCrapCoordinates relVecCoordinates zF
-    
+
+    --Prediction
+    renderPrediction screen toCrapCoordinates (prediction game)
+
     SDL.flip screen
     return True

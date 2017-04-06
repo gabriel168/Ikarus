@@ -102,7 +102,8 @@ start = Running
     , camPos = pos . rocket $ start
     , camZoom = 1 
     , worldTime = 0 
-    , solarSystem = theSolarSystem }
+    , solarSystem = theSolarSystem
+    , prediction = [] }
 
 runGame :: (Monad m, HasTime t s) => GameState -> Wire s () m (Set SDL.Keysym) GameState
 runGame prevF = mkPure $ \ds keys -> (Right prevF, runGame (nextFrame ds keys prevF))   
@@ -148,7 +149,8 @@ nextFrame ds ks prevF  =
                     , camPos = pos' 
                     , camZoom = zoom'
                     , worldTime = dt+(worldTime prevF)
-                    , solarSystem = solarSystem' }
+                    , solarSystem = solarSystem'
+                    , prediction = predict 4000 (15*dt) prevF }
 
 
 gravity :: V2 Double -> CelestialBody -> V2 Double
@@ -157,6 +159,31 @@ gravity player body = vec ^* ((mass body)/((**1.5).quadrance $ vec))
 
 updateSystem :: Double -> [CelestialBody] -> [CelestialBody]
 updateSystem time sys = map (\cb -> cb {bodyPos = orbit cb $ time }) sys
+
+predict :: Int -> Double -> GameState -> [V2 Double]
+predict 0 _ g = [(pos.rocket$g)]
+predict n dt g  = (pos.rocket$g):(predict (n-1) dt (predictFrame dt g))
+
+predictFrame :: Double -> GameState -> GameState
+predictFrame dt prevF  =
+    let solarSystem' = updateSystem (worldTime prevF) (solarSystem prevF)
+
+        gravt_acc = sum . map (gravity$pos . rocket$prevF) $ solarSystem'
+
+        acc' = gravt_acc
+        vel' = (vel$rocket prevF) + (dt *^ acc')
+        pos' = (pos$rocket prevF) + (dt *^ vel')
+
+    in Running{ rocket = Rocket
+                    { acc = acc'
+                    , vel = vel'
+                    , pos = pos'
+                    , orientation = 0 }
+                , camPos = V2 0 0
+                , camZoom = 0
+                , worldTime = dt+(worldTime prevF)
+                , solarSystem = solarSystem'
+                , prediction = [] }
 
 --------------------------------------------------------------
 
@@ -176,7 +203,7 @@ main = do
         (ds, cses') <- stepSession cses 
         (eg, gW') <- stepWire gW ds (Right keysDown')
         let ng = either (const start) id eg
-        putStrLn $ show ds
+        --putStrLn $ show ds
         x <- renderFrame screen ng  
         if x then do 
             --SDL.delay (1000 `div` 120)

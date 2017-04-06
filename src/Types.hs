@@ -14,7 +14,8 @@ data GameState = Running
     , camPos :: (V2 Double)
     , camZoom :: !Double
     , worldTime :: !Double
-    , solarSystem :: [CelestialBody] }
+    , solarSystem :: [CelestialBody]
+    , prediction :: ![V2 Double] }
                | Over
 
 data CelestialBody = Body
