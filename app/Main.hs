@@ -5,6 +5,7 @@ import Control.Wire hiding (empty)
 import FRP.Netwire hiding (empty)
 import Data.Monoid (Monoid)
 import Data.Set (Set, empty, insert, delete, null, filter)
+import Data.List (unfoldr)
 import Linear
 import Control.Lens
 import qualified Graphics.UI.SDL as SDL
@@ -33,6 +34,7 @@ import Rendering
 - A/D: Point Rocket Radially In/Out
 - Left/Right: Turn Rocket
 - Up: ACTIVATE ENGINE
+- Space: Fine Thrust
 ------------------------------------}
 
 --Parameters
@@ -56,10 +58,9 @@ keyDown s k = not . null . filter ((== k) . SDL.symKey) $ s
 deriving instance Ord SDL.Keysym
 
 --Key processing
-getWarp :: Set SDL.Keysym -> Double
-getWarp ks = 
-    let keyDown' = keyDown ks
-    in if keyDown' (SDL.SDLK_1) then 2
+getWarp :: (SDL.SDLKey -> Bool) -> Double
+getWarp keyDown' = 
+       if keyDown' (SDL.SDLK_1) then 2
   else if keyDown' (SDL.SDLK_2) then 4
   else if keyDown' (SDL.SDLK_3) then 8
   else if keyDown' (SDL.SDLK_4) then 16
@@ -69,17 +70,15 @@ getWarp ks =
   else if keyDown' (SDL.SDLK_8) then 256
   else 1 
 
-getZoom :: Set SDL.Keysym -> Double
-getZoom ks = 
-    let  keyDown' = keyDown ks
-    in if keyDown' (SDL.SDLK_q) then zoomSpeed
+getZoom :: (SDL.SDLKey -> Bool) -> Double
+getZoom keyDown' = 
+       if keyDown' (SDL.SDLK_q) then zoomSpeed
   else if keyDown' (SDL.SDLK_e) then (-zoomSpeed)
   else 0
 
-getOrientation :: Set SDL.Keysym -> Double -> (GameState -> Double)
-getOrientation ks dt =
-    let  keyDown' = keyDown ks
-         offset  = if keyDown' (SDL.SDLK_w) then Just 0  
+getOrientation :: (SDL.SDLKey -> Bool) -> Double -> (GameState -> Double)
+getOrientation keyDown' dt =
+    let  offset  = if keyDown' (SDL.SDLK_w) then Just 0  
               else if keyDown' (SDL.SDLK_s) then Just pi
               else if keyDown' (SDL.SDLK_a) then Just (pi/2)
               else if keyDown' (SDL.SDLK_d) then Just (-pi/2)
@@ -91,6 +90,13 @@ getOrientation ks dt =
             Just x  -> (+x) . getA . vel . rocket
             Nothing -> (+(dt*turning_rate)) . orientation . rocket
         
+
+getThrust :: (SDL.SDLKey -> Bool) -> Double   
+getThrust keyDown' = if keyDown' (SDL.SDLK_UP) then (
+                        if keyDown' (SDL.SDLK_SPACE) then 0.1*thrust 
+                        else thrust ) 
+                     else 0
+
 --Core Logic
 start :: GameState
 start = Running
@@ -114,11 +120,11 @@ gameW = runGame start
 nextFrame :: (HasTime a t) => t -> Set SDL.Keysym -> GameState -> GameState
 nextFrame ds ks prevF  = 
     let keyDown' = keyDown $ ks
-        warpF = getWarp ks
+        warpF = getWarp keyDown' 
         dt = (*warpF) . realToFrac . dtime $ ds
         
         --View Zoom
-        zoomRate = getZoom ks
+        zoomRate = getZoom keyDown'
         zoom' = if keyDown' (SDL.SDLK_r) then 1
                 else (*(1+dt*zoomRate)) . camZoom $ prevF
 
@@ -126,11 +132,9 @@ nextFrame ds ks prevF  =
         solarSystem' = updateSystem (worldTime prevF) (solarSystem prevF)
 
         --Ship Steering
-        or' = getOrientation ks dt $ prevF
-        -- In Thrust We Trust --
-        engine_acc = (^*engine_Power) . angle $ or'
-        engine_Power = if keyDown' (SDL.SDLK_UP) then thrust 
-                       else 0
+        or' = getOrientation keyDown' dt $ prevF
+        engine_acc = (^*engine_Power) . angle $ or'     --In Thrust We Trust 
+        engine_Power = getThrust keyDown'        
         
         --Gravity
         gravt_acc = sum . map (gravity$pos . rocket$prevF) $ solarSystem'
@@ -150,7 +154,7 @@ nextFrame ds ks prevF  =
                     , camZoom = zoom'
                     , worldTime = dt+(worldTime prevF)
                     , solarSystem = solarSystem'
-                    , prediction = predict 4000 (15*dt) prevF }
+                    , prediction = predict 10000 (0.2) prevF }
 
 
 gravity :: V2 Double -> CelestialBody -> V2 Double
@@ -161,9 +165,8 @@ updateSystem :: Double -> [CelestialBody] -> [CelestialBody]
 updateSystem time sys = map (\cb -> cb {bodyPos = orbit cb $ time }) sys
 
 predict :: Int -> Double -> GameState -> [V2 Double]
-predict 0 _ g = [(pos.rocket$g)]
-predict n dt g  = (pos.rocket$g):(predict (n-1) dt (predictFrame dt g))
-
+predict n dt g = take n $ unfoldr (\g -> Just ((pos . rocket $ g), predictFrame dt g)) g
+    
 predictFrame :: Double -> GameState -> GameState
 predictFrame dt prevF  =
     let solarSystem' = updateSystem (worldTime prevF) (solarSystem prevF)
