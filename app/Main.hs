@@ -40,7 +40,7 @@ import Rendering
 --Parameters
 thrust = 100 
 agility = 1+pi
-zoomSpeed = 7 
+zoomSpeed = 6 
 
 --Keypress detection
 parseEvents :: Set SDL.Keysym -> IO (Set SDL.Keysym)
@@ -103,10 +103,10 @@ start = Running
     { rocket = Rocket
         { acc = V2 0 0
         , vel = V2 0 (sqrt$(mass theSun)/((pos . rocket $ start)^._x))
-        , pos = V2 ((*1.1).size$theSun) 0 
+        , pos = V2 ((*1.0).size$theSun) 0 
         , orientation = 0 }
     , camPos = pos . rocket $ start
-    , camZoom = 1 
+    , camZoom = 0.7244633253307354 --1 
     , worldTime = 0 
     , solarSystem = theSolarSystem
     , prediction = [] }
@@ -118,7 +118,7 @@ gameW :: (Monad m, HasTime t s) => Wire s () m (Set SDL.Keysym) GameState
 gameW = runGame start
 
 nextFrame :: (HasTime a t) => t -> Set SDL.Keysym -> GameState -> GameState
-nextFrame ds ks prevF  = 
+nextFrame ds ks prevF = 
     let keyDown' = keyDown $ ks
         warpF = getWarp keyDown' 
         dt = (*warpF) . realToFrac . dtime $ ds
@@ -126,7 +126,7 @@ nextFrame ds ks prevF  =
         --View Zoom
         zoomRate = getZoom keyDown'
         zoom' = if keyDown' (SDL.SDLK_r) then 1
-                else (*(1+dt*zoomRate)) . camZoom $ prevF
+                else min 15.0 ((*(1+dt*zoomRate)) . camZoom $ prevF)
 
         --Update Solar System
         solarSystem' = updateSystem (worldTime prevF) (solarSystem prevF)
@@ -189,9 +189,8 @@ predictFrame dt prevF  =
                 , prediction = [] }
 
 --------------------------------------------------------------
-
 width' = fromIntegral width
-height' = fromIntegral height
+height' = fromIntegral height 
 
 main :: IO ()
 main = do
@@ -200,13 +199,13 @@ main = do
     screen <- SDL.setVideoMode width' height' 32 [SDL.SWSurface]
     void $ go empty screen clockSession_ gameW
 
-    where 
-    go keysDown screen cses gW = do
+    where
+      go keysDown screen cses gW = do
         keysDown' <- parseEvents keysDown
         (ds, cses') <- stepSession cses 
         (eg, gW') <- stepWire gW ds (Right keysDown')
         let ng = either (const start) id eg
-        --putStrLn $ show ds
+        putStrLn $ show . camZoom $ ng --ds
         x <- renderFrame screen ng  
         if x then do 
             --SDL.delay (1000 `div` 120)
