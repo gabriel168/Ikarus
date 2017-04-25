@@ -34,7 +34,7 @@ merkur = Body
     , size = 1000
     , orbitRadius = 50000
     , orbit = getOrbit$orbitRadius merkur
-    , bodyPos = V2 0 0
+    , bodyPos = V2 0 0 
     , colour = SDL.Pixel 0xB8434FF }
 
 venus :: CelestialBody
@@ -42,6 +42,6 @@ venus = Body
     { mass = 6000000
     , size = 1700
     , orbitRadius = 100000
-    , orbit = getOrbit$orbitRadius venus
+    , orbit = getOrbit $ orbitRadius venus
     , bodyPos = V2 0 0
     , colour = SDL.Pixel 0xFF0000FF }

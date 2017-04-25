@@ -103,7 +103,7 @@ start = Running
     { rocket = Rocket
         { acc = V2 0 0
         , vel = V2 0 (sqrt$(mass theSun)/((pos . rocket $ start)^._x))
-        , pos = V2 ((*1.0).size$theSun) 0 
+        , pos = V2 ((*1.1).size$theSun) 0 
         , orientation = 0 }
     , camPos = pos . rocket $ start
     , camZoom = 0.7244633253307354 --1 
@@ -137,14 +137,19 @@ nextFrame ds ks prevF =
         engine_Power = getThrust keyDown'        
         
         --Gravity
-        gravt_acc = sum . map (gravity$pos . rocket$prevF) $ solarSystem'
+        gravt_acc = sum . map (gravity . pos . rocket $ prevF) $ solarSystem'
          
         --'Integrate' the next velocity/position
         acc' = gravt_acc + engine_acc
         vel' = (vel$rocket prevF) + (dt *^ acc')
         pos' = (pos$rocket prevF) + (dt *^ vel')
         
-       in if keyDown' (SDL.SDLK_ESCAPE) then Over 
+        -- Collision detection & ESC key  
+        collided = any (isColliding pos'){-. pos . rocket $ prevF)-} (solarSystem prevF) 
+        stopRunning = keyDown' (SDL.SDLK_ESCAPE)            
+                    || collided                       
+
+        in if stopRunning then Over 
         else Running{ rocket = Rocket
                         { acc = acc'
                         , vel = vel'
@@ -163,6 +168,11 @@ gravity player body = vec ^* ((mass body)/((**1.5).quadrance $ vec))
 
 updateSystem :: Double -> [CelestialBody] -> [CelestialBody]
 updateSystem time sys = map (\cb -> cb {bodyPos = orbit cb $ time }) sys
+
+isColliding :: V2 Double -> CelestialBody -> Bool
+isColliding playerPos b = quadrance ((bodyPos b)-playerPos) < (size b)^2
+
+------------------------------------------------------------------------
 
 predict :: Int -> Double -> GameState -> [V2 Double]
 predict n dt g = take n $ unfoldr (\g -> Just ((pos . rocket $ g), predictFrame dt g)) g
@@ -205,7 +215,7 @@ main = do
         (ds, cses') <- stepSession cses 
         (eg, gW') <- stepWire gW ds (Right keysDown')
         let ng = either (const start) id eg
-        putStrLn $ show . camZoom $ ng --ds
+        putStrLn . show $ {-camZoom $ ng -}ds
         x <- renderFrame screen ng  
         if x then do 
             --SDL.delay (1000 `div` 120)
