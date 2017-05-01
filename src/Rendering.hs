@@ -4,13 +4,14 @@ import Linear
 import Control.Lens
 import Control.Monad
 import qualified Graphics.UI.SDL as SDL
+import qualified Graphics.UI.SDL.Image as IMG
 import Graphics.UI.SDL.Primitives
 import Graphics.UI.SDL.Color
 
 import Types
 
-width = 1920 
-height = 1000
+width = 1280 
+height = 720
 
 pointOnScreen :: (Ord a, Num a) => (a, a) -> Bool
 pointOnScreen (x,y) = not $ (x > width') || (y > height') || (x < 0) || (y < 0)
@@ -38,25 +39,44 @@ toCrapCoordinates' camP z v = (dispV ^._x, (height' - dispV ^._y))
 relVecCoordinates' :: (Num a) => a -> a -> V2 a -> (a,a)
 relVecCoordinates' z f v = (z*f*v^._x, -z*f*v^._y)
 
+loadAssets :: SDL.Surface -> IO Assets
+loadAssets screen = do
+    rocketImage <- IMG.load "assets/rakete.jpg"
+    -- cat <- IMG.load "ordner/sdsdfs.jpg"
+    return (Assets { rocketImage = rocketImage })
+    -- return (Assets { rocketImage = rocketImage, cat = cat })
+
 -------------------------------------------------------
 
-renderRocket :: SDL.Surface -> Rocket 
+renderRocket
+    :: SDL.Surface
+    -> Assets
+    -> Rocket 
     -> (V2 Double -> (Double, Double))              
     -> (Double -> V2 Double -> (Double, Double)) 
     -> Double
     -> IO()
-renderRocket screen rocket' tcC rvC zF = do
-    let (x,y) = tcC . pos $ rocket'
-        pI = 0.7*pi
-        a = angle . orientation $ rocket' 
-        (a_x,a_y) = rvC 30 a
-        b = angle .(+pI) . orientation $ rocket'
-        (b_x,b_y) = rvC 20 b
-        c = angle . (+(-pI)) . orientation $ rocket'
-        (c_x,c_y) = rvC 20 c
+renderRocket screen assets rocket0 tcC rvC zF = do
+    -- let (x,y) = tcC . pos $ rocket'
+    --     pI = 0.7*pi
+    --     a = angle . orientation $ rocket' 
+    --     (a_x,a_y) = rvC 30 a
+    --     b = angle .(+pI) . orientation $ rocket'
+    --     (b_x,b_y) = rvC 20 b
+    --     c = angle . (+(-pI)) . orientation $ rocket'
+    --     (c_x,c_y) = rvC 20 c
     
-    filledTrigon screen (round$x+a_x) (round$y+a_y) (round$x+b_x) (round$y+b_y) (round$x+c_x) (round$y+c_y) (SDL.Pixel 0xC4CED3FF) 
-    filledCircle screen (round x) (round y) (2) (SDL.Pixel 0xC4CED3FF)
+    -- filledTrigon screen (round$x+a_x) (round$y+a_y) (round$x+b_x) (round$y+b_y) (round$x+c_x) (round$y+c_y) (SDL.Pixel 0xC4CED3FF) 
+    -- filledCircle screen (round x) (round y) (2) (SDL.Pixel 0xC4CED3FF)
+    let px = 100
+    let dx = 0
+    let py = 100
+
+    r@(SDL.Rect _ _ w h) <- SDL.getClipRect (rocketImage assets)
+
+
+    void $ SDL.blitSurface (rocketImage assets) (Just r) screen
+        (Just $ SDL.Rect (round (px-dx) ) (round py ) w h)
     
     --Velocity Indicator
     let v = vel rocket'
@@ -105,11 +125,11 @@ connectPoints s tcC c a b = do
 
 --------------------------------------------------------
 
-renderFrame :: SDL.Surface -> GameState -> IO Bool
-renderFrame screen Over = do 
+renderFrame :: SDL.Surface -> Assets -> GameState -> IO Bool
+renderFrame screen assets Over = do 
     SDL.quit
     return False
-renderFrame screen game = do
+renderFrame screen assets game = do
     let toCrapCoordinates = toCrapCoordinates' (camPos game) (camZoom game)
         relVecCoordinates = relVecCoordinates' $ camZoom game
         zF = camZoom game
@@ -121,7 +141,7 @@ renderFrame screen game = do
     mapM_ (renderBody screen toCrapCoordinates zF) (solarSystem game)
 
     --Rocket
-    renderRocket screen (rocket game) toCrapCoordinates relVecCoordinates zF
+    renderRocket screen assets (rocket game) toCrapCoordinates relVecCoordinates zF
 
     --Prediction
     renderPrediction screen toCrapCoordinates (prediction game)

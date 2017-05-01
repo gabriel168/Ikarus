@@ -9,6 +9,7 @@ import Data.List (unfoldr)
 import Linear
 import Control.Lens
 import qualified Graphics.UI.SDL as SDL
+import qualified Graphics.UI.SDL.Image as IMG
 import Graphics.UI.SDL.Primitives
 import Graphics.UI.SDL.Color
 import Text.Show.Functions
@@ -207,18 +208,20 @@ main = do
     SDL.init [SDL.InitEverything]
     SDL.setCaption "Ikarus" ""
     screen <- SDL.setVideoMode width' height' 32 [SDL.SWSurface]
-    void $ go empty screen clockSession_ gameW
+    assets <- loadAssets screen
+    void $ go empty screen assets clockSession_ gameW
 
-    where
-      go keysDown screen cses gW = do
+  where 
+    go keysDown screen assets cses gW = do
         keysDown' <- parseEvents keysDown
         (ds, cses') <- stepSession cses 
         (eg, gW') <- stepWire gW ds (Right keysDown')
         let ng = either (const start) id eg
         putStrLn . show $ {-camZoom $ ng -}ds
-        x <- renderFrame screen ng  
+        --putStrLn $ show ds
+        x <- renderFrame screen assets ng  
         if x then do 
             --SDL.delay (1000 `div` 120)
-            go keysDown' screen cses' gW'
+            go keysDown' screen assets cses' gW'
         else do
             return ()

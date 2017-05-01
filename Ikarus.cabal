@@ -21,6 +21,7 @@ library
                      , linear 
                      , lens
                      , SDL
+                     , SDL-image == 0.6.*
                      , SDL-gfx
  default-language:    Haskell2010
 
@@ -31,6 +32,7 @@ executable Ikarus-exe
   build-depends:      base
                     , Ikarus
                     , SDL
+                    , SDL-image == 0.6.*
                     , SDL-gfx
                     , netwire
                     , containers

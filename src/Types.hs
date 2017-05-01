@@ -1,6 +1,9 @@
 module Types where
 
+import qualified Graphics.UI.SDL as SDL
 import qualified Graphics.UI.SDL.Color as SDL
+import qualified Graphics.UI.SDL.Image as IMG
+
 import Linear
 
 data Rocket = Rocket
@@ -26,3 +29,5 @@ data CelestialBody = Body
     , bodyPos :: !(V2 Double)
     , colour :: !SDL.Pixel }
 
+data Assets = Assets
+    { rocketImage :: !SDL.Surface }
