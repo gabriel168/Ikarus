@@ -42,7 +42,7 @@ relVecCoordinates' z f v = (z*f*v^._x, -z*f*v^._y)
 
 loadAssets :: SDL.Surface -> IO Assets
 loadAssets screen = do
-    rocketImage <- IMG.load "assets/rakete.jpg"
+    rocketImage <- IMG.load "assets/rocket_transparent.png"
     -- cat <- IMG.load "ordner/sdsdfs.jpg"
     return (Assets { rocketImage = rocketImage })
     -- return (Assets { rocketImage = rocketImage, cat = cat })
