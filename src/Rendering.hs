@@ -7,6 +7,7 @@ import qualified Graphics.UI.SDL as SDL
 import qualified Graphics.UI.SDL.Image as IMG
 import Graphics.UI.SDL.Primitives
 import Graphics.UI.SDL.Color
+import qualified Graphics.UI.SDL.Rotozoomer as Roto
 
 import Types
 
@@ -56,38 +57,46 @@ renderRocket
     -> (Double -> V2 Double -> (Double, Double)) 
     -> Double
     -> IO()
-renderRocket screen assets rocket0 tcC rvC zF = do
-    -- let (x,y) = tcC . pos $ rocket'
-    --     pI = 0.7*pi
-    --     a = angle . orientation $ rocket' 
-    --     (a_x,a_y) = rvC 30 a
-    --     b = angle .(+pI) . orientation $ rocket'
-    --     (b_x,b_y) = rvC 20 b
-    --     c = angle . (+(-pI)) . orientation $ rocket'
-    --     (c_x,c_y) = rvC 20 c
+renderRocket screen assets rocket' tcC rvC zF = do
+    let (x,y) = tcC . pos $ rocket'
+        pI = 0.7*pi
+        a = angle . orientation $ rocket' 
+        (a_x,a_y) = rvC 30 a
+        b = angle .(+pI) . orientation $ rocket'
+        (b_x,b_y) = rvC 20 b
+        c = angle . (+(-pI)) . orientation $ rocket'
+        (c_x,c_y) = rvC 20 c
     
     -- filledTrigon screen (round$x+a_x) (round$y+a_y) (round$x+b_x) (round$y+b_y) (round$x+c_x) (round$y+c_y) (SDL.Pixel 0xC4CED3FF) 
     -- filledCircle screen (round x) (round y) (2) (SDL.Pixel 0xC4CED3FF)
-    let px = 100
-    let dx = 0
-    let py = 100
+    let px = x
+    let py = y
 
-    r@(SDL.Rect _ _ w h) <- SDL.getClipRect (rocketImage assets)
-
-
-    void $ SDL.blitSurface (rocketImage assets) (Just r) screen
-        (Just $ SDL.Rect (round (px-dx) ) (round py ) w h)
+    let rotationAngle = orientation rocket'
+    let zoom = 0.1
     
+
+    let rocketSurface = rocketImage assets
+    rotatedRocketSurface <- Roto.rotozoom rocketSurface rotationAngle zoom True
+
+
+
+    r@(SDL.Rect _ _ w h) <- SDL.getClipRect (rotatedRocketSurface)
+
+
+    void $ SDL.blitSurface (rotatedRocketSurface) (Just r) screen
+        (Just $ SDL.Rect (round px) (round py) w h)
+
     --Velocity Indicator
     let v = vel rocket'
         (vel_x,vel_y) = rvC 1 v  
         indS = round $ zF * 15
-    -- (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 40 50 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+vel_x) (round$y-zF*10+vel_y) indS indS)  
+    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 40 50 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+vel_x) (round$y-zF*10+vel_y) indS indS)  
     
     --Acceleration Indicator
     let a = acc rocket'
         (acc_x,acc_y) = rvC 1 a
-    -- (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 40 250 40 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+acc_x) (round$y-zF*10+acc_y) indS indS)
+    (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 40 250 40 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+acc_x) (round$y-zF*10+acc_y) indS indS)
     return ()
 
 ---------------------------------------------------------    
