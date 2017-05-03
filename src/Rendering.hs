@@ -72,8 +72,8 @@ renderRocket screen assets rocket' tcC rvC zF = do
     let px = x
     let py = y
 
-    let rotationAngle = orientation rocket'
-    let zoom = 0.1
+    let rotationAngle = (*(180/pi)) . orientation $ rocket'
+    let zoom = 0.25*zF
     
 
     let rocketSurface = rocketImage assets
