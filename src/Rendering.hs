@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module Rendering where
 
 import Linear
@@ -43,8 +45,10 @@ relVecCoordinates' z f v = (z*f*v^._x, -z*f*v^._y)
 loadAssets :: SDL.Surface -> IO Assets
 loadAssets screen = do
     rocketImage <- IMG.load "assets/rocket_transparent.png"
+    greenSaturnImage <- IMG.load "assets/PlanetGruenerSaturn.png"
+    sunImage <- IMG.load "assets/Sun.png"
     -- cat <- IMG.load "ordner/sdsdfs.jpg"
-    return (Assets { rocketImage = rocketImage })
+    return (Assets { rocketImage, greenSaturnImage, sunImage })
     -- return (Assets { rocketImage = rocketImage, cat = cat })
 
 -------------------------------------------------------
@@ -95,14 +99,14 @@ renderRocket screen assets rocket' tcC rvC zF = do
     
     --Acceleration Indicator
     let a = acc rocket'
-        (acc_x,acc_y) = rvC 1 a
+        (acc_x,acc_y) = rvC 0 a
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 40 250 40 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+acc_x) (round$y-zF*10+acc_y) indS indS)
     return ()
 
 ---------------------------------------------------------    
     
-renderBody :: SDL.Surface -> (V2 Double -> (Double, Double)) -> Double -> CelestialBody -> IO ()
-renderBody screen tcC zF body = do
+renderBody :: SDL.Surface -> Assets -> (V2 Double -> (Double, Double)) -> Double -> CelestialBody -> IO ()
+renderBody screen assets tcC zF body = do
     let (xC, yC) = tcC $ V2 0 0
         (x,y) = tcC $ bodyPos body
         r = (*zF) . size $ body
@@ -112,6 +116,9 @@ renderBody screen tcC zF body = do
     circle screen (round xC) (round yC) (round$zF*t_r) (SDL.Pixel 0xFFFFFFFF) --0x1b6f8E88) 
     if onScr then filledCircle screen (round x) (round y) (round r) (colour body)
              else return True
+
+    let circleSurface = rocketImage assets
+    
     return ()
 
 --------------------------------------------------------
@@ -147,7 +154,7 @@ renderFrame screen assets game = do
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
    
     --Planets
-    mapM_ (renderBody screen toCrapCoordinates zF) (solarSystem game)
+    mapM_ (renderBody screen assets toCrapCoordinates zF) (solarSystem game)
 
     --Rocket
     renderRocket screen assets (rocket game) toCrapCoordinates relVecCoordinates zF

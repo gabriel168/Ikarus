@@ -30,4 +30,7 @@ data CelestialBody = Body
     , colour :: !SDL.Pixel }
 
 data Assets = Assets
-    { rocketImage :: !SDL.Surface }
+    { rocketImage :: !SDL.Surface
+    , greenSaturnImage :: !SDL.Surface
+    , sunImage :: !SDL.Surface
+    }
