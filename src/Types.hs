@@ -12,6 +12,9 @@ data Rocket = Rocket
     , pos :: V2 Double
     , orientation :: Double }
 
+-- TODO: make me better
+data BodyName = Sun | Merkur | Venus
+
 data GameState = Running
     { rocket :: !Rocket 
     , camPos :: (V2 Double)
@@ -27,10 +30,14 @@ data CelestialBody = Body
     , orbitRadius :: !Double
     , orbit :: Double -> V2 Double
     , bodyPos :: !(V2 Double)
-    , colour :: !SDL.Pixel }
+    , name :: !BodyName
+    }
 
+
+-- | All image assets used by the game.
 data Assets = Assets
     { rocketImage :: !SDL.Surface
     , greenSaturnImage :: !SDL.Surface
     , sunImage :: !SDL.Surface
+    , earthImage :: !SDL.Surface
     }

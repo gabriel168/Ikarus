@@ -3,6 +3,7 @@
 module Rendering where
 
 import Linear
+import Bodies
 import Control.Lens
 import Control.Monad
 import qualified Graphics.UI.SDL as SDL
@@ -47,8 +48,9 @@ loadAssets screen = do
     rocketImage <- IMG.load "assets/rocket_transparent.png"
     greenSaturnImage <- IMG.load "assets/PlanetGruenerSaturn.png"
     sunImage <- IMG.load "assets/Sun.png"
+    earthImage <- IMG.load "assets/Erde.png"
     -- cat <- IMG.load "ordner/sdsdfs.jpg"
-    return (Assets { rocketImage, greenSaturnImage, sunImage })
+    return (Assets { rocketImage, greenSaturnImage, sunImage, earthImage })
     -- return (Assets { rocketImage = rocketImage, cat = cat })
 
 -------------------------------------------------------
@@ -82,12 +84,7 @@ renderRocket screen assets rocket' tcC rvC zF = do
 
     let rocketSurface = rocketImage assets
     rotatedRocketSurface <- Roto.rotozoom rocketSurface rotationAngle zoom True
-
-
-
     r@(SDL.Rect _ _ w h) <- SDL.getClipRect (rotatedRocketSurface)
-
-
     void $ SDL.blitSurface (rotatedRocketSurface) (Just r) screen
         (Just $ SDL.Rect (round px) (round py) w h)
 
@@ -104,7 +101,16 @@ renderRocket screen assets rocket' tcC rvC zF = do
     return ()
 
 ---------------------------------------------------------    
-    
+
+-- | take picture out of CeletialBody
+bodyToImage :: Assets -> CelestialBody -> (SDL.Surface, Double)
+bodyToImage assets celestialBody = case name celestialBody of
+    Sun -> (sunImage assets, 10)
+    Merkur -> (earthImage assets, 1)
+    Venus -> (greenSaturnImage assets, 3)
+-- (e.g f(x) = x * 4)
+
+
 renderBody :: SDL.Surface -> Assets -> (V2 Double -> (Double, Double)) -> Double -> CelestialBody -> IO ()
 renderBody screen assets tcC zF body = do
     let (xC, yC) = tcC $ V2 0 0
@@ -112,12 +118,16 @@ renderBody screen assets tcC zF body = do
         r = (*zF) . size $ body
         t_r = orbitRadius body
         onScr = planetOnScreen (xC, yC) r
+        (image, imageZoomFactor) = bodyToImage assets body -- assigne a variable to image
 
-    circle screen (round xC) (round yC) (round$zF*t_r) (SDL.Pixel 0xFFFFFFFF) --0x1b6f8E88) 
-    if onScr then filledCircle screen (round x) (round y) (round r) (colour body)
-             else return True
+    rotatedCelestialBody <- Roto.zoom image (zF*imageZoomFactor) (zF*imageZoomFactor) False   -- <- Roto.rotozoom image 1.0 (zF * 1) True
+    r@(SDL.Rect _ _ w h) <- SDL.getClipRect (rotatedCelestialBody)
+    void $ SDL.blitSurface (rotatedCelestialBody) (Just r) screen
+        (Just $ SDL.Rect (round (x-0.5*(fromIntegral w))) (round (y-0.5*(fromIntegral h))) w h)
 
-    let circleSurface = rocketImage assets
+    -- circle screen (round xC) (round yC) (round$zF*t_r) (SDL.Pixel 0xFFFFFFFF) --0x1b6f8E88) 
+    -- if onScr then filledCircle screen (round x) (round y) (round r) (colour body)
+    --          else return True
     
     return ()
 

@@ -19,14 +19,15 @@ getOrbit t_r = \x ->  (^*(t_r)) . angle . (*(angVel'$t_r)) $ x
 theSolarSystem :: [CelestialBody]
 theSolarSystem = [theSun, merkur, venus]
 
-theSun :: CelestialBody
+theSun ::  CelestialBody
 theSun = Body
     { mass = 1000000000
     , size = 10000
     , orbitRadius = 0
     , orbit = \_ -> V2 0 0
     , bodyPos = V2 0 0
-    , colour = SDL.Pixel 0xFFDE00FF }
+    , name = Sun
+    }
 
 merkur :: CelestialBody
 merkur = Body
@@ -35,7 +36,8 @@ merkur = Body
     , orbitRadius = 50000
     , orbit = getOrbit$orbitRadius merkur
     , bodyPos = V2 0 0 
-    , colour = SDL.Pixel 0xB8434FF }
+    , name = Merkur
+    }
 
 venus :: CelestialBody
 venus = Body
@@ -44,4 +46,5 @@ venus = Body
     , orbitRadius = 100000
     , orbit = getOrbit $ orbitRadius venus
     , bodyPos = V2 0 0
-    , colour = SDL.Pixel 0xFF0000FF }
+    , name = Venus
+    }
