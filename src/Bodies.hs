@@ -7,10 +7,14 @@ import Text.Show.Functions
 
 import Types
 
+--Angular velocity of an body in circular orbit (radius r) around a body of mass m
 angVel :: Double -> Double -> Double
-angVel m r = sqrt$ m/(r^3)
-angVel' = angVel$mass theSun
+angVel m r = sqrt $ m/(r^3)
 
+--Angular velocity of a planet orbiting our sun at a certain radius
+angVel' = angVel $ mass theSun
+
+--Returns the orbit function for a given body with orbit radius t_r
 getOrbit :: Double -> (Double -> V2 Double)
 getOrbit t_r = \x ->  (^*(t_r)) . angle . (*(angVel'$t_r)) $ x
 
