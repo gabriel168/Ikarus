@@ -17,25 +17,6 @@ import Types
 import Bodies
 import Rendering
 
-{---------------------------------------------------------
----------- The Comprehensive Control Manual --------------
-----------------------------------------------------------
-- Esc: Quit
--
---View--
-- E: Zoom out
-- Q: Zoom in
-- R: Reset Zoom to 1
-- Number n from 1-8: Warp time by a factor of 2^n
--
---Steering--
-- W/S: Point Rocket Pro-/Retrograde
-- A/D: Point Rocket Radially In/Out
-- Left/Right: Turn Rocket
-- Up: ACTIVATE ENGINE
-- Space: Fine Thrust for more precise manoeuvering
-----------------------------------------------------------}
-
 --Parameters
 thrust = 100    --acceleration which the rocket is capable of
 agility = 1+pi  --turning rate of the rocket
