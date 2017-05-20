@@ -1,7 +1,7 @@
-#Ikarus
+# Ikarus
 A 2d spaceflight simulator written in Haskell
 
-###Control Manual
+### Control Manual
 View/General
 
  - Esc: Quit
