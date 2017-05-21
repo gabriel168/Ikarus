@@ -7,7 +7,7 @@ import Data.Monoid (Monoid)
 import Data.Set (Set, empty, insert, delete, null, filter)
 import Data.List (unfoldr)
 import Linear
-import Control.Lens
+import Control.Lens hiding (view)
 import qualified Graphics.UI.SDL as SDL
 import Graphics.UI.SDL.Primitives
 import Graphics.UI.SDL.Color
@@ -106,7 +106,7 @@ nextFrame ds ks prevF =
         --View Zoom
         zoomRate = checkZoomRate keyDown'
         zoom' = if keyDown' (SDL.SDLK_r) then 1 --option to reset the zoom
-                else (max 0.0005) . (min 15.0) $ ((*(1+dt*zoomRate)) . camZoom $ prevF) --limit the zoomFactor to prevent glitches 
+                else (max 0.0005) . (min 15.0) $ ((*(1+dt*zoomRate)) . camZoom . view $ prevF) --limit the zoomFactor to prevent glitches 
 
         --Update the Solar System
         solarSystem' = updateSystem worldTime' (solarSystem prevF)
@@ -135,11 +135,12 @@ nextFrame ds ks prevF =
                         , vel = vel'
                         , pos = pos'
                         , orientation = or' }
-                   , camPos = pos' 
-                   , camZoom = zoom'
-                   , worldTime = worldTime'
-                   , solarSystem = solarSystem'
-                   , prediction = predict 10000 (0.2) prevF }
+                    , view = Camera
+                        { camPos = pos' 
+                        , camZoom = zoom' }
+                    , worldTime = worldTime'
+                    , solarSystem = solarSystem'
+                    , prediction = predict 10000 (0.5) prevF }
 
 --Predict the positions of the rocket in the next n frames
 predict :: Int -> Double -> GameState -> [V2 Double]
@@ -156,14 +157,23 @@ predictFrame dt prevF =
         acc' = gravt_acc
         vel' = (vel$rocket prevF) + (dt *^ acc')
         pos' = (pos$rocket prevF) + (dt *^ vel')
-
+  {-      
+        worldTime'' = worldTime' + 0.5*dt
+        solarSystem'' = updateSystem worldTime'' solarSystem'
+        gravt_acc' = sum . map (gravity pos') $ solarSystem''
+        
+        acc'' = gravt_acc'
+        vel'' = vel' + (0.5*dt *^ acc'')
+        pos'' = (pos . rocket $ prevF) + (dt *^ vel'')
+-}
     in Running{ rocket = Rocket
                     { acc = acc'
                     , vel = vel'
                     , pos = pos'
                     , orientation = 0 }
-                , camPos = V2 0 0
-                , camZoom = 0
+                , view = Camera
+                    { camPos = V2 0 0
+                    , camZoom = 0 }
                 , worldTime = worldTime'
                 , solarSystem = solarSystem'
                 , prediction = [] }
@@ -174,11 +184,12 @@ start :: GameState
 start = Running
     { rocket = Rocket
         { acc = V2 0 0
-        , vel = V2 0 (sqrt$(mass theSun)/((pos . rocket $ start)^._x)) --required velocity for a circular orbit around the sun
+        , vel = V2 0 (sqrt $ (mass theSun)/((pos . rocket $ start)^._x) ) --required velocity for a circular orbit around the sun
         , pos = V2 ((*1.1).size$theSun) 0 
         , orientation = 0 }
-    , camPos = pos . rocket $ start
-    , camZoom = 1   --0.7244633253307354 
+    , view = Camera
+        { camPos = V2 0 0 
+        , camZoom = 1 {-0.7244633253307354-} }
     , worldTime = 0 
     , solarSystem = theSolarSystem
     , prediction = [] }

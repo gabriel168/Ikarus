@@ -19,11 +19,15 @@ data CelestialBody = Body
     , bodyPos :: !(V2 Double)      --Stores the position to avoid calculating it more often than necessary
     , colour :: !SDL.Pixel }
 
+data CameraView = Camera
+    { camPos :: !(V2 Double)
+    , camZoom :: !Double }
+
+
 --Represent the state of the entire simulation
 data GameState = Running
     { rocket :: !Rocket 
-    , camPos :: (V2 Double)
-    , camZoom :: !Double
+    , view :: !CameraView 
     , worldTime :: !Double
     , solarSystem :: [CelestialBody]
     , prediction :: ![V2 Double] }

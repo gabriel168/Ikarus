@@ -1,7 +1,7 @@
 module Rendering where
 
 import Linear
-import Control.Lens
+import Control.Lens hiding (view)
 import Control.Monad
 import qualified Graphics.UI.SDL as SDL
 import Graphics.UI.SDL.Primitives
@@ -9,19 +9,23 @@ import Graphics.UI.SDL.Color
 
 import Types
 
+--Window dimensions in Pixels
 width = 1920 
 height = 1000
 
+--Checks wether a point is in the window
 pointOnScreen :: (Ord a, Num a) => (a, a) -> Bool
 pointOnScreen (x,y) = not $ (x > width') || (y > height') || (x < 0) || (y < 0)
     where width' = fromIntegral width
           height' = fromIntegral height
 
+--Check wether a planet is in the window
 planetOnScreen :: (Ord a, Num a) => (a,a) -> a -> Bool
 planetOnScreen (x,y) r = (x < width') || (y < height') || (x > (-r)) || (y > (-r))
     where width' = (+r) . fromIntegral $ width
           height' = (+r) . fromIntegral $ height
 
+--returns the angle in which a vector is pointing
 getA :: V2 Double -> Double
 getA v = atan2 y x
     where x = v ^._x
@@ -30,23 +34,27 @@ getA v = atan2 y x
 center = V2 (f width) (f height)
     where f = fromIntegral . (`div` 2)
 
-toCrapCoordinates' :: V2 Double -> Double -> V2 Double -> (Double, Double)
-toCrapCoordinates' camP z v = (dispV ^._x, (height' - dispV ^._y))
-    where dispV = z*^(v - camP) + center
+--Converts points from our coordinate system (i.e. origin at the center of the sun)
+--to where they need to be displayed in the window (origin at top left corner, y axis oriented downwards)
+--camera position & zoom are accounted for         
+toWindowCoordinates' :: CameraView -> V2 Double -> (Double, Double) 
+toWindowCoordinates' cam point = (x, y)
+    where (x, y) = (dispV ^._x, (height' - dispV ^._y))
+          dispV = (camZoom cam)*^(point - (camPos cam)) + center
           height' = fromIntegral height
 
-relVecCoordinates' :: (Num a) => a -> a -> V2 a -> (a,a)
+--Scales a vector v by both the z and f, returns it as pair
+relVecCoordinates' :: (Num a) => a -> a -> V2 a -> (a,a) 
 relVecCoordinates' z f v = (z*f*v^._x, -z*f*v^._y)
 
 -------------------------------------------------------
 
-renderRocket :: SDL.Surface -> Rocket 
-    -> (V2 Double -> (Double, Double))              
-    -> (Double -> V2 Double -> (Double, Double)) 
-    -> Double
+renderRocket :: SDL.Surface -> Rocket --window & rocket to be rendered on the window
+    -> (V2 Double -> (Double, Double)) --toWindowCoordinates function             
+    -> (Double -> V2 Double -> (Double, Double)) -- relVecCoordinates Function
     -> IO()
-renderRocket screen rocket' tcC rvC zF = do
-    let (x,y) = tcC . pos $ rocket'
+renderRocket screen rocket' tWC rvC = do
+    let (x,y) = tWC . pos $ rocket'
         pI = 0.7*pi
         a = angle . orientation $ rocket' 
         (a_x,a_y) = rvC 30 a
@@ -55,48 +63,44 @@ renderRocket screen rocket' tcC rvC zF = do
         c = angle . (+(-pI)) . orientation $ rocket'
         (c_x,c_y) = rvC 20 c
     
-    filledTrigon screen (round$x+a_x) (round$y+a_y) (round$x+b_x) (round$y+b_y) (round$x+c_x) (round$y+c_y) (SDL.Pixel 0xC4CED3FF) 
-    filledCircle screen (round x) (round y) (2) (SDL.Pixel 0xC4CED3FF)
+    --Displays the rocket as pointy triangle
+    filledTrigon screen (round $ x+a_x) (round $ y+a_y) (round $ x+b_x) (round $ y+b_y) (round $ x+c_x) (round $ y+c_y) (SDL.Pixel 0xC4CED3FF) 
     
-    --Velocity Indicator
-    let v = vel rocket'
-        (vel_x,vel_y) = rvC 1 v  
-        indS = round $ zF * 15
-    -- (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 200 40 50 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+vel_x) (round$y-zF*10+vel_y) indS indS)  
+    filledCircle screen (round x) (round y) (2) (SDL.Pixel 0xC4CED3FF) --tiny, fixed size circle to have the rocket still be visible when zoomed out really far
     
-    --Acceleration Indicator
-    let a = acc rocket'
-        (acc_x,acc_y) = rvC 1 a
-    -- (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 40 250 40 >>= SDL.fillRect screen (Just $ SDL.Rect (round$x-zF*10+acc_x) (round$y-zF*10+acc_y) indS indS)
     return ()
 
 ---------------------------------------------------------    
     
-renderBody :: SDL.Surface -> (V2 Double -> (Double, Double)) -> Double -> CelestialBody -> IO ()
-renderBody screen tcC zF body = do
-    let (xC, yC) = tcC $ V2 0 0
-        (x,y) = tcC $ bodyPos body
+renderBody :: SDL.Surface 
+    -> (V2 Double -> (Double, Double)) --toWindowCoordinates function
+    -> Double --zoom Factor
+    -> CelestialBody -> IO () --Body to be rendered
+renderBody screen tWC zF body = do
+    let (xC, yC) = tWC $ V2 0 0
+        (x,y) = tWC $ bodyPos body
         r = (*zF) . size $ body
         t_r = orbitRadius body
         onScr = planetOnScreen (xC, yC) r
 
-    circle screen (round xC) (round yC) (round$zF*t_r) (SDL.Pixel 0xFFFFFFFF) --0x1b6f8E88) 
-    if onScr then filledCircle screen (round x) (round y) (round r) (colour body)
+    circle screen (round xC) (round yC) (round $ zF*t_r) (SDL.Pixel 0xFFFFFFAA) --circle indicating the planets orbit
+    if onScr then filledCircle screen (round x) (round y) (round r) (colour body) --planet rendered only when on screen
              else return True
     return ()
 
 --------------------------------------------------------
-
+--connect the predicted positions to a line
 renderPrediction :: SDL.Surface -> (V2 Double -> (Double, Double)) -> [V2 Double] -> IO ()
-renderPrediction screen tcC pts = do
-    zipWithM (connectPoints screen tcC (SDL.Pixel 0x6071AF)) pts (tail pts)
+renderPrediction screen tWC pts = do
+    zipWithM (connectPoints screen tWC (SDL.Pixel 0x6071AF)) pts (tail pts)
     return ()
-    
+
+--make a line between two points if they are both within the window    
 connectPoints :: SDL.Surface -> (V2 Double -> (Double, Double)) -> SDL.Pixel -> V2 Double -> V2 Double -> IO ()
-connectPoints s tcC c a b = do 
+connectPoints s tWC c a b = do 
     let r = round
-        (xa, ya) = tcC a
-        (xb, yb) = tcC b
+        (xa, ya) = tWC a
+        (xb, yb) = tWC b
         onScr = (pointOnScreen (xa,ya)) || (pointOnScreen (xb, yb))
     if onScr 
        then line s (r xa) (r ya) (r xb) (r yb) c
@@ -106,25 +110,25 @@ connectPoints s tcC c a b = do
 --------------------------------------------------------
 
 renderFrame :: SDL.Surface -> GameState -> IO Bool
-renderFrame screen Over = do 
-    SDL.quit
+renderFrame screen Over = do
+    SDL.quit --close the window if the game is over
     return False
 renderFrame screen game = do
-    let toCrapCoordinates = toCrapCoordinates' (camPos game) (camZoom game)
-        relVecCoordinates = relVecCoordinates' $ camZoom game
-        zF = camZoom game
+    let toWindowCoordinates = toWindowCoordinates' (view game)
+        relVecCoordinates = relVecCoordinates' $ camZoom . view $ game
+        zF = camZoom . view $ game
         
     --Background
     (SDL.mapRGB . SDL.surfaceGetPixelFormat) screen 10 10 10 >>= SDL.fillRect screen Nothing
    
     --Planets
-    mapM_ (renderBody screen toCrapCoordinates zF) (solarSystem game)
+    mapM_ (renderBody screen toWindowCoordinates zF) (solarSystem game)
 
     --Rocket
-    renderRocket screen (rocket game) toCrapCoordinates relVecCoordinates zF
+    renderRocket screen (rocket game) toWindowCoordinates relVecCoordinates 
 
     --Prediction
-    renderPrediction screen toCrapCoordinates (prediction game)
+    renderPrediction screen toWindowCoordinates (prediction game)
 
     SDL.flip screen
     return True
