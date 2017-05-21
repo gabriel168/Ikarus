@@ -37,9 +37,10 @@ parseEvents keysDown = do
 keyDown :: Set SDL.Keysym -> SDL.SDLKey -> Bool
 keyDown s k = not . null . filter ((== k) . SDL.symKey) $ s
 
-deriving instance Ord SDL.Keysym --Keys have to be ordered for the Data.Set data structure to work
+deriving instance Ord SDL.Keysym --Keys have to be ordered for the Set data structure to work
 
 --Key processing--
+
 checkTimeWarp :: (SDL.SDLKey -> Bool) -> Double
 checkTimeWarp keyDown' = 
        if keyDown' (SDL.SDLK_1) then 2
@@ -91,7 +92,7 @@ gravity player body = vec ^* ((mass body)/((**1.5).quadrance $ vec))
 updateSystem :: Double -> [CelestialBody] -> [CelestialBody]
 updateSystem time sys = map (\cb -> cb {bodyPos = orbit cb $ time }) sys
 
---Check wether the Player has crashed into a planet
+--Check whether the Player has crashed into a planet
 isColliding :: V2 Double -> CelestialBody -> Bool
 isColliding playerPos b = quadrance ((bodyPos b)-playerPos) < (size b)^2
 
@@ -140,14 +141,16 @@ nextFrame ds ks prevF =
                         , camZoom = zoom' }
                     , worldTime = worldTime'
                     , solarSystem = solarSystem'
-                    , prediction = predict 10000 (0.5) prevF }
+                    , prediction = predict 10000 (0.5) (Just prevF) }
 
 --Predict the positions of the rocket in the next n frames
-predict :: Int -> Double -> GameState -> [V2 Double]
-predict n dt g = take n $ unfoldr (\g -> Just ((pos . rocket $ g), predictFrame dt g)) g
+predict :: Int -> Double -> Maybe GameState -> [V2 Double]
+predict n dt g = take n $ unfoldr (\g -> case g of
+                                            Nothing -> Nothing
+                                            Just g -> Just ((pos . rocket $ g), predictFrame dt g)) g
 
 --Similar to nextFrame except it ignores keystrokes & does not make another prediction within the prediction
-predictFrame :: Double -> GameState -> GameState
+predictFrame :: Double -> GameState -> Maybe GameState
 predictFrame dt prevF =
     let worldTime' = (+dt) . worldTime $ prevF
         solarSystem' = updateSystem worldTime' (solarSystem prevF)
@@ -165,8 +168,11 @@ predictFrame dt prevF =
         acc'' = gravt_acc'
         vel'' = vel' + (0.5*dt *^ acc'')
         pos'' = (pos . rocket $ prevF) + (dt *^ vel'')
--}
-    in Running{ rocket = Rocket
+  -}
+        collided = any (isColliding pos') (solarSystem')
+
+    in if collided then Nothing
+       else Just Running{ rocket = Rocket
                     { acc = acc'
                     , vel = vel'
                     , pos = pos'
@@ -217,6 +223,7 @@ main = do
         let ng = either (\_ -> start) id eg --extract the gamestate from the Either wrapper it was put in bec. thats how NetWire works
         --putStrLn . show $ ng 
         x <- renderFrame screen ng --renders everything, closes the window & returns false if the game has ended
+        putStrLn . show $ ds
         if x then do 
             go keysDown' screen cses' gW'
         else do
