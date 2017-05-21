@@ -63,10 +63,11 @@ renderRocket screen rocket' tWC rvC = do
         c = angle . (+(-pI)) . orientation $ rocket'
         (c_x,c_y) = rvC 20 c
     
-    --Displays the rocket as pointy triangle
+    --Displays the rocket as pointy triangle:
     filledTrigon screen (round $ x+a_x) (round $ y+a_y) (round $ x+b_x) (round $ y+b_y) (round $ x+c_x) (round $ y+c_y) (SDL.Pixel 0xC4CED3FF) 
     
-    filledCircle screen (round x) (round y) (2) (SDL.Pixel 0xC4CED3FF) --tiny, fixed size circle to have the rocket still be visible when zoomed out really far
+    --tiny, fixed size circle to have the rocket still be visible when zoomed out really far:
+    filledCircle screen (round x) (round y) (2) (SDL.Pixel 0xC4CED3FF) 
     
     return ()
 
@@ -82,9 +83,12 @@ renderBody screen tWC zF body = do
         r = (*zF) . size $ body
         t_r = orbitRadius body
         onScr = planetOnScreen (xC, yC) r
-
-    circle screen (round xC) (round yC) (round $ zF*t_r) (SDL.Pixel 0xFFFFFFAA) --circle indicating the planets orbit
-    if onScr then filledCircle screen (round x) (round y) (round r) (colour body) --planet rendered only when on screen
+    
+    --circle indicating the planets orbit:
+    circle screen (round xC) (round yC) (round $ zF*t_r) (SDL.Pixel 0xFFFFFFAA) 
+    
+    --planet rendered only when on screen
+    if onScr then filledCircle screen (round x) (round y) (round r) (colour body) 
              else return True
     return ()
 
