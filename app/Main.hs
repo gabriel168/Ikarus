@@ -20,7 +20,7 @@ import Rendering
 --Parameters
 thrust = 100    --acceleration which the rocket is capable of
 agility = 1+pi  --turning rate of the rocket
-zoomSpeed = 6  
+zoomSpeed = 4  
 
 --Keypress detection - 
 --add keys to the set if they are pressed, delete them if they are released 
@@ -126,7 +126,9 @@ nextFrame ds ks prevF =
         --Find the position of the planet wich exerts the greatest gravitational force
         f = quadrance . fst
         soi_center = bodyPos . snd $ maximumBy (\a b -> compare (f a) (f b)) solSyswithGravity
-
+        ignore_soi = keyDown' (SDL.SDLK_f)
+        soi_center' = if ignore_soi then V2 0 0
+                      else soi_center
   
         --'Integrate' the next velocity/position
         acc' = gravt_acc + engine_acc
@@ -149,18 +151,18 @@ nextFrame ds ks prevF =
                         , camZoom = zoom' }
                     , worldTime = worldTime'
                     , solarSystem = solarSystem'
-                    , prediction = predict 10000 (0.5) (Just prevF)
-                    , soicenter = soi_center }
+                    , prediction = predict 10000 (0.5) (Just prevF) (ignore_soi)
+                    , soicenter = soi_center' }
 
 --Predict the positions of the rocket in the next n frames
-predict :: Int -> Double -> Maybe GameState -> [(V2 Double, V2 Double)]
-predict n dt g@(Just gNotMaybe) = take n $ (flip unfoldr) g 
+predict :: Int -> Double -> Maybe GameState -> Bool -> [(V2 Double, V2 Double)]
+predict n dt g ignore_soi = take n $ (flip unfoldr) g 
                                   (\frame -> case frame of --note to future self: i am sorry
                                             Nothing -> Nothing
                                             Just frame -> Just (
                                                 (
                                                     (pos . rocket $ frame),
-                                                    (soicenter frame)
+                                                    (if ignore_soi then V2 0 0 else soicenter frame)
                                                 ) 
                                                 , predictFrame dt frame)
                                   )
