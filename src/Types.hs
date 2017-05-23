@@ -30,5 +30,6 @@ data GameState = Running
     , view :: !CameraView 
     , worldTime :: !Double
     , solarSystem :: [CelestialBody]
-    , prediction :: ![V2 Double] }
+    , prediction :: ![(V2 Double, V2 Double)] --(position of the rocket, position of the body with the greatest gravitational force)
+    , soicenter :: V2 Double }
                | Over 

@@ -5,7 +5,7 @@ import Control.Wire hiding (empty)
 import FRP.Netwire hiding (empty)
 import Data.Monoid (Monoid)
 import Data.Set (Set, empty, insert, delete, null, filter)
-import Data.List (unfoldr)
+import Data.List (unfoldr, maximumBy)
 import Linear
 import Control.Lens hiding (view)
 import qualified Graphics.UI.SDL as SDL
@@ -109,17 +109,25 @@ nextFrame ds ks prevF =
         zoom' = if keyDown' (SDL.SDLK_r) then 1 --option to reset the zoom
                 else (max 0.0005) . (min 15.0) $ ((*(1+dt*zoomRate)) . camZoom . view $ prevF) --limit the zoomFactor to prevent glitches 
 
-        --Update the Solar System
-        solarSystem' = updateSystem worldTime' (solarSystem prevF)
-
         --Ship Steering
         or' = checkRotation keyDown' dt $ prevF
         engine_Power = checkThrust keyDown' --In Thrust We Trust
         engine_acc = (^*engine_Power) . angle $ or'
+ 
+        --Update the Solar System
+        solarSystem' = updateSystem worldTime' (solarSystem prevF)
         
+        --Gravity
+        solSyswithGravity = map (\b -> ((gravity . pos . rocket $ prevF) b, b)) solarSystem'
+
         --Sum of all gravitational forces acting on the rocket
-        gravt_acc = sum . map (gravity . pos . rocket $ prevF) $ solarSystem'
-         
+        gravt_acc = sum $ map fst solSyswithGravity
+
+        --Find the position of the planet wich exerts the greatest gravitational force
+        f = quadrance . fst
+        soi_center = bodyPos . snd $ maximumBy (\a b -> compare (f a) (f b)) solSyswithGravity
+
+  
         --'Integrate' the next velocity/position
         acc' = gravt_acc + engine_acc
         vel' = (vel . rocket $ prevF) + (dt *^ acc')
@@ -131,7 +139,7 @@ nextFrame ds ks prevF =
                     || collided                       
 
     in if stopRunning then Over 
-       else Running{ rocket = Rocket
+       else prevF { rocket = Rocket
                         { acc = acc'
                         , vel = vel'
                         , pos = pos'
@@ -141,38 +149,46 @@ nextFrame ds ks prevF =
                         , camZoom = zoom' }
                     , worldTime = worldTime'
                     , solarSystem = solarSystem'
-                    , prediction = predict 10000 (0.5) (Just prevF) }
+                    , prediction = predict 10000 (0.5) (Just prevF)
+                    , soicenter = soi_center }
 
 --Predict the positions of the rocket in the next n frames
-predict :: Int -> Double -> Maybe GameState -> [V2 Double]
-predict n dt g = take n $ unfoldr (\g -> case g of
+predict :: Int -> Double -> Maybe GameState -> [(V2 Double, V2 Double)]
+predict n dt g@(Just gNotMaybe) = take n $ (flip unfoldr) g 
+                                  (\frame -> case frame of --note to future self: i am sorry
                                             Nothing -> Nothing
-                                            Just g -> Just ((pos . rocket $ g), predictFrame dt g)) g
+                                            Just frame -> Just (
+                                                (
+                                                    (pos . rocket $ frame),
+                                                    (soicenter frame)
+                                                ) 
+                                                , predictFrame dt frame)
+                                  )
 
 --Similar to nextFrame except it ignores keystrokes & does not make another prediction within the prediction
 predictFrame :: Double -> GameState -> Maybe GameState
 predictFrame dt prevF =
     let worldTime' = (+dt) . worldTime $ prevF
         solarSystem' = updateSystem worldTime' (solarSystem prevF)
-
-        gravt_acc = sum . map (gravity . pos . rocket $ prevF) $ solarSystem'
+        
+        --Gravity
+        solSyswithGravity = map (\b -> ((gravity . pos . rocket $ prevF) b, b)) solarSystem' 
+        
+        --Sum of all gravitational forces acting on the rocket
+        gravt_acc = sum $ map fst solSyswithGravity
+        
+        --Find the position of the planet wich exerts the greatest gravitational force
+        f = quadrance . fst
+        soi_center = bodyPos . snd $ maximumBy (\a b -> compare (f a) (f b)) solSyswithGravity        
 
         acc' = gravt_acc
         vel' = (vel$rocket prevF) + (dt *^ acc')
         pos' = (pos$rocket prevF) + (dt *^ vel')
-  {-      
-        worldTime'' = worldTime' + 0.5*dt
-        solarSystem'' = updateSystem worldTime'' solarSystem'
-        gravt_acc' = sum . map (gravity pos') $ solarSystem''
-        
-        acc'' = gravt_acc'
-        vel'' = vel' + (0.5*dt *^ acc'')
-        pos'' = (pos . rocket $ prevF) + (dt *^ vel'')
-  -}
+  
         collided = any (isColliding pos') (solarSystem')
 
     in if collided then Nothing
-       else Just Running{ rocket = Rocket
+       else Just prevF { rocket = Rocket
                     { acc = acc'
                     , vel = vel'
                     , pos = pos'
@@ -182,7 +198,8 @@ predictFrame dt prevF =
                     , camZoom = 0 }
                 , worldTime = worldTime'
                 , solarSystem = solarSystem'
-                , prediction = [] }
+                , prediction = []
+                , soicenter = soi_center }
 
 --------------------------------------------------------------
 --The first frame
@@ -198,7 +215,8 @@ start = Running
         , camZoom = 1 {-0.7244633253307354-} }
     , worldTime = 0 
     , solarSystem = theSolarSystem
-    , prediction = [] }
+    , prediction = []
+    , soicenter = V2 0 0 }
 
 --Returns the current frame as well as an updated version of itself 
 runGame :: (Monad m, HasTime t s) => GameState -> Wire s () m (Set SDL.Keysym) GameState
@@ -221,7 +239,7 @@ main = do
         (ds, cses') <- stepSession cses   --update the clock session & get the time passed since the last frame
         (eg, gW') <- stepWire gW ds (Right keysDown') --calculate the next frame
         let ng = either (\_ -> start) id eg --extract the gamestate from the Either wrapper it was put in bec. thats how NetWire works
-        --putStrLn . show $ ng 
+        --putStrLn . show . soicenter $ ng 
         x <- renderFrame screen ng --renders everything, closes the window & returns false if the game has ended
         putStrLn . show $ ds
         if x then do 

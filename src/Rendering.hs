@@ -94,20 +94,23 @@ renderBody screen tWC zF body = do
 
 --------------------------------------------------------
 --connect the predicted positions to a line
-renderPrediction :: SDL.Surface -> (V2 Double -> (Double, Double)) -> [V2 Double] -> IO ()
-renderPrediction screen tWC pts = do
-    zipWithM (connectPoints screen tWC (SDL.Pixel 0x6071AF)) pts (tail pts)
+renderPrediction :: SDL.Surface -> V2 Double -> (V2 Double -> (Double, Double)) -> [(V2 Double, V2 Double)] -> IO ()
+renderPrediction screen soi_center tWC pts = do
+    zipWithM (connectPoints screen soi_center tWC (SDL.Pixel 0x6071AF)) pts (tail pts)
     return ()
 
 --make a line between two points if they are both within the window    
-connectPoints :: SDL.Surface -> (V2 Double -> (Double, Double)) -> SDL.Pixel -> V2 Double -> V2 Double -> IO ()
-connectPoints s tWC c a b = do 
+connectPoints :: SDL.Surface -> V2 Double -> (V2 Double -> (Double, Double)) -> SDL.Pixel -> (V2 Double, V2 Double) -> (V2 Double, V2 Double) -> IO ()
+connectPoints surface soicenter tWC c a b = do 
     let r = round
-        (xa, ya) = tWC a
-        (xb, yb) = tWC b
+        f (rocket, planet) = (x_rel, y_rel)
+            where (x_rel, y_rel) = tWC $ soicenter + rocket - planet
+
+        (xa, ya) = f a
+        (xb, yb) = f b
         onScr = (pointOnScreen (xa,ya)) || (pointOnScreen (xb, yb))
     if onScr 
-       then line s (r xa) (r ya) (r xb) (r yb) c
+       then line surface (r xa) (r ya) (r xb) (r yb) c
        else return True 
     return ()
 
@@ -132,7 +135,7 @@ renderFrame screen game = do
     renderRocket screen (rocket game) toWindowCoordinates relVecCoordinates 
 
     --Prediction
-    renderPrediction screen toWindowCoordinates (prediction game)
+    renderPrediction screen (soicenter game) toWindowCoordinates (prediction game)
 
     SDL.flip screen
     return True
