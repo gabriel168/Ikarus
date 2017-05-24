@@ -25,8 +25,8 @@ theSolarSystem = [theSun, merkur, venus]
 
 theSun :: CelestialBody
 theSun = Body
-    { mass = 1000000000
-    , size = 10000
+    { mass = 1*10^9
+    , size = 1*10^4
     , orbitRadius = 0
     , orbit = \_ -> V2 0 0
     , bodyPos = V2 0 0
@@ -34,18 +34,18 @@ theSun = Body
 
 merkur :: CelestialBody
 merkur = Body
-    { mass = 5000000
-    , size = 1000
-    , orbitRadius = 50000
+    { mass = 8*10^6
+    , size = 1*10^3
+    , orbitRadius = 5*10^4
     , orbit = getOrbit$orbitRadius merkur
     , bodyPos = V2 0 0 
     , colour = SDL.Pixel 0xB8434FF }
 
 venus :: CelestialBody
 venus = Body
-    { mass = 6000000
-    , size = 1700
-    , orbitRadius = 100000
+    { mass = 6*10^6
+    , size = 1.7*10^3
+    , orbitRadius = 1*10^5
     , orbit = getOrbit $ orbitRadius venus
     , bodyPos = V2 0 0
     , colour = SDL.Pixel 0xFF0000FF }
