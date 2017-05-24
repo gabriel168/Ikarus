@@ -18,7 +18,7 @@ import Bodies
 import Rendering
 
 --Parameters
-thrust = 100    --acceleration which the rocket is capable of
+thrust = 60     --acceleration which the rocket is capable of
 agility = 1+pi  --turning rate of the rocket
 zoomSpeed = 4  
 
@@ -72,7 +72,11 @@ checkRotation keyDown' dt =
                   else if keyDown' (SDL.SDLK_RIGHT) then (-agility)
                   else 0
     in case offset of
-            Just x  -> (+x) . getA . vel . rocket
+            Just x  -> (+x) . getA . relvel
+                        where relvel = (\g -> (f . b $ g) - (f . a $ g))
+                              b = (!!2) . prediction
+                              a = (!!0) . prediction
+                              f = \p -> (fst p) - (snd p)
             Nothing -> (+(dt*turning_rate)) . orientation . rocket
         
 checkThrust :: (SDL.SDLKey -> Bool) -> Double   
@@ -126,7 +130,9 @@ nextFrame ds ks prevF =
         --Find the position of the planet wich exerts the greatest gravitational force
         f = quadrance . fst
         soi_center = bodyPos . snd $ maximumBy (\a b -> compare (f a) (f b)) solSyswithGravity
-        ignore_soi = keyDown' (SDL.SDLK_f)
+        ignore_soi = if keyDown' (SDL.SDLK_f) then False
+                     else if keyDown' (SDL.SDLK_g) then True
+                     else ignoresoi prevF
         soi_center' = if ignore_soi then V2 0 0
                       else soi_center
   
@@ -151,8 +157,9 @@ nextFrame ds ks prevF =
                         , camZoom = zoom' }
                     , worldTime = worldTime'
                     , solarSystem = solarSystem'
-                    , prediction = predict 10000 (0.5) (Just prevF) (ignore_soi)
-                    , soicenter = soi_center' }
+                    , prediction = predict 10000 0.3 (Just prevF) (ignore_soi)
+                    , soicenter = soi_center'
+                    , ignoresoi = ignore_soi }
 
 --Predict the positions of the rocket in the next n frames
 predict :: Int -> Double -> Maybe GameState -> Bool -> [(V2 Double, V2 Double)]
@@ -218,7 +225,8 @@ start = Running
     , worldTime = 0 
     , solarSystem = theSolarSystem
     , prediction = []
-    , soicenter = V2 0 0 }
+    , soicenter = V2 0 0 
+    , ignoresoi = True }
 
 --Returns the current frame as well as an updated version of itself 
 runGame :: (Monad m, HasTime t s) => GameState -> Wire s () m (Set SDL.Keysym) GameState

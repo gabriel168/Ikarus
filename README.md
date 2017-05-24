@@ -8,7 +8,7 @@ View/General
  - Q/E: Zoom In/Out
  - R: Reset the zoom factor
  - Number n from 1-8: Warp time by a factor of 2^n
- - f: Make the prediction line ignore changes in the sphere of influence & display everything from the sun's perspective
+ - f/g: Toggle between solar perspective & taking into account motion around a planet when displaying the prediction line 
 
 Manoeuvering
 
