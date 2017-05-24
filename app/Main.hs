@@ -18,9 +18,9 @@ import Bodies
 import Rendering
 
 --Parameters
-thrust = 60     --acceleration which the rocket is capable of
-agility = 1+pi  --turning rate of the rocket
-zoomSpeed = 4  
+thrust = 50     --acceleration which the rocket is capable of
+agility = 3.5  --turning rate of the rocket
+zoomSpeed = 5  
 
 --Keypress detection - 
 --add keys to the set if they are pressed, delete them if they are released 
@@ -86,7 +86,6 @@ checkThrust keyDown' =  if keyDown' (SDL.SDLK_UP) then (
                         else 0
 
 --Core Logic
-
 --Calculate the gravitational force from a body acting on a player
 gravity :: V2 Double -> CelestialBody -> V2 Double
 gravity player body = vec ^* ((mass body)/((**1.5).quadrance $ vec)) 
@@ -226,7 +225,7 @@ start = Running
     , solarSystem = theSolarSystem
     , prediction = []
     , soicenter = V2 0 0 
-    , ignoresoi = True }
+    , ignoresoi = False }
 
 --Returns the current frame as well as an updated version of itself 
 runGame :: (Monad m, HasTime t s) => GameState -> Wire s () m (Set SDL.Keysym) GameState
@@ -249,9 +248,8 @@ main = do
         (ds, cses') <- stepSession cses   --update the clock session & get the time passed since the last frame
         (eg, gW') <- stepWire gW ds (Right keysDown') --calculate the next frame
         let ng = either (\_ -> start) id eg --extract the gamestate from the Either wrapper it was put in bec. thats how NetWire works
-        --putStrLn . show . soicenter $ ng 
         x <- renderFrame screen ng --renders everything, closes the window & returns false if the game has ended
-        putStrLn . show $ ds
+        --putStrLn . show $ ds
         if x then do 
             go keysDown' screen cses' gW'
         else do
