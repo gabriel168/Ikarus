@@ -73,10 +73,9 @@ checkRotation keyDown' dt =
                   else 0
     in case offset of
             Just x  -> (+x) . getA . relvel
-                        where relvel = (\g -> (f . b $ g) - (f . a $ g))
-                              b = (!!2) . prediction
+                        where relvel = (\g -> (b $ g) - (a $ g))
+                              b = (!!1) . prediction
                               a = (!!0) . prediction
-                              f = \p -> (fst p) - (snd p)
             Nothing -> (+(dt*turning_rate)) . orientation . rocket
         
 checkThrust :: (SDL.SDLKey -> Bool) -> Double   
@@ -161,14 +160,14 @@ nextFrame ds ks prevF =
                     , ignoresoi = ignore_soi }
 
 --Predict the positions of the rocket in the next n frames
-predict :: Int -> Double -> Maybe GameState -> Bool -> [(V2 Double, V2 Double)]
+predict :: Int -> Double -> Maybe GameState -> Bool -> [V2 Double]
 predict n dt g ignore_soi = take n $ (flip unfoldr) g 
                                   (\frame -> case frame of --note to future self: i am sorry
                                             Nothing -> Nothing
                                             Just frame -> Just (
                                                 (
-                                                    (pos . rocket $ frame),
-                                                    (if ignore_soi then V2 0 0 else soicenter frame)
+                                                    if ignore_soi then (pos . rocket $ frame)
+                                                    else (pos . rocket $ frame) - (soicenter frame)
                                                 ) 
                                                 , predictFrame dt frame)
                                   )
@@ -187,8 +186,8 @@ predictFrame dt prevF =
         
         --Find the position of the planet wich exerts the greatest gravitational force
         f = quadrance . fst
-        soi_center = bodyPos . snd $ maximumBy (\a b -> compare (f a) (f b)) solSyswithGravity        
-
+        soi_center = bodyPos . snd $ maximumBy (\a b -> compare (f a) (f b)) solSyswithGravity
+        
         acc' = gravt_acc
         vel' = (vel$rocket prevF) + (dt *^ acc')
         pos' = (pos$rocket prevF) + (dt *^ vel')
